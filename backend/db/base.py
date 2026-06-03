@@ -31,10 +31,14 @@ def _build_engine() -> Engine:
         connect_args = {"check_same_thread": False}
 
     return create_engine(
-        settings.database_url,
+        settings.normalized_database_url,
         connect_args=connect_args,
         echo=False,
         future=True,
+        # Validates a pooled connection before use, so the first query after a
+        # managed Postgres (e.g. Neon) auto-suspends doesn't fail on a stale
+        # connection. Harmless for SQLite.
+        pool_pre_ping=True,
     )
 
 

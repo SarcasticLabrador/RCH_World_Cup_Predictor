@@ -3,7 +3,7 @@
 An office prediction game for the 2026 FIFA World Cup. Colleagues predict
 scorelines stage by stage, earn points, and compete on a leaderboard.
 
-- **Backend:** FastAPI + SQLAlchemy + SQLite (persistent volume)
+- **Backend:** FastAPI + SQLAlchemy (SQLite for local dev, managed Postgres in prod)
 - **Frontend:** Streamlit (multi-page app) — *from Phase 2*
 - **Auth:** email magic links via Brevo single-sender (no IT/DNS needed) — *Phase 2*
 - **Results:** API-Football auto-fetch with manual override — *from Phase 4*
@@ -20,7 +20,7 @@ scorelines stage by stage, earn points, and compete on a leaderboard.
 | 5 | Leaderboard & special predictions | ✅ done |
 | 6 | Scheduler & reminder emails | ✅ done |
 | 7 | Gemini AI match centre | ✅ done |
-| 8 | Polish & deploy (Streamlit Cloud + persistent volume) | ⏳ |
+| 8 | Polish & deploy (Streamlit Cloud + Render + Neon) | ✅ done |
 
 ## Scoring rules
 
@@ -87,6 +87,15 @@ AI briefing of recent results and upcoming fixtures on the Match Centre page.
 Without a key, the page still shows fixtures — only the AI prose is hidden.
 The "Include latest team news" toggle adds recent team news via Gemini's
 Google Search grounding. Uses the Gemini REST API directly (no extra SDK).
+
+## Deployment (free)
+
+See **`DEPLOY.md`** for the full step-by-step. In short:
+Streamlit Community Cloud (frontend) → Render free web service (FastAPI) →
+Neon free Postgres, with recurring jobs driven by a GitHub Actions cron
+(`.github/workflows/maintenance.yml`). The Render blueprint is `render.yaml`.
+SQLite is used only for local development; production uses Postgres
+(the `DATABASE_URL` is the only change — the schema is portable).
 
 ## Project layout
 

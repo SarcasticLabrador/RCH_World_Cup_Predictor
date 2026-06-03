@@ -5,7 +5,21 @@ import os
 
 import httpx
 
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
+
+def _resolve_backend_url() -> str:
+    """Backend base URL from env (local) or Streamlit secrets (Streamlit Cloud)."""
+    url = os.getenv("BACKEND_URL")
+    if not url:
+        try:
+            import streamlit as st
+
+            url = st.secrets.get("BACKEND_URL")  # type: ignore[attr-defined]
+        except Exception:
+            url = None
+    return (url or "http://localhost:8000").rstrip("/")
+
+
+BACKEND_URL = _resolve_backend_url()
 _TIMEOUT = 15.0
 
 

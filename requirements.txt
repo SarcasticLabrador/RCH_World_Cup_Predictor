@@ -13,8 +13,16 @@ httpx==0.28.1
 # --- Frontend ---
 streamlit==1.41.1
 
+# --- Database driver (Phase 8: managed Postgres for deployment) ---
+# SQLite is built in for local dev; psycopg (v3) is used for Neon/Supabase.
+psycopg[binary]==3.2.3
+
 # --- Scheduler (Phase 6) ---
 APScheduler==3.10.4
 
 # --- Gemini AI (Phase 7) ---
 # Uses the Gemini REST API via httpx (already required) — no extra SDK needed.
+
+# --- Production database (Phase 8) ---
+# Postgres driver for managed DBs (e.g. Neon). Not needed for local SQLite.
+psycopg[binary]==3.2.3

@@ -19,6 +19,18 @@ for _parent in _here.parents:
 
 import streamlit as st  # noqa: E402
 
+# On Streamlit Community Cloud, configuration is provided via st.secrets. Copy
+# BACKEND_URL into the environment before importing the API client (which reads
+# it at import time). Locally, an existing env var or the default is used.
+import os  # noqa: E402
+
+try:
+    _backend = st.secrets.get("BACKEND_URL")
+    if _backend:
+        os.environ.setdefault("BACKEND_URL", str(_backend))
+except Exception:
+    pass
+
 from frontend import api_client  # noqa: E402
 from frontend.auth import logout, require_login  # noqa: E402
 from frontend.views import home as home_view  # noqa: E402

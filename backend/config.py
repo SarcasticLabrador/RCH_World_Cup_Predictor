@@ -80,6 +80,21 @@ class Settings(BaseSettings):
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")
 
+    @property
+    def normalized_database_url(self) -> str:
+        """Use the psycopg (v3) driver for Postgres URLs.
+
+        Managed providers (Neon, Supabase) hand out 'postgresql://...' URLs,
+        which SQLAlchemy maps to psycopg2 by default. We ship psycopg v3, so
+        rewrite the scheme to 'postgresql+psycopg://' transparently.
+        """
+        url = self.database_url
+        if url.startswith("postgresql://"):
+            return "postgresql+psycopg://" + url[len("postgresql://"):]
+        if url.startswith("postgres://"):  # some providers use this alias
+            return "postgresql+psycopg://" + url[len("postgres://"):]
+        return url
+
 
 @lru_cache
 def get_settings() -> Settings:
