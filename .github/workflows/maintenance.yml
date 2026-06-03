@@ -1,0 +1,42 @@
+name: Scheduled maintenance
+
+# Drives the backend's recurring jobs without an always-on scheduler.
+# - maintenance (every 2h): refresh results -> score -> open windows -> reminders
+#   (this also wakes the free Render backend, keeping it warm during match days)
+# - snapshot (daily 04:00 UTC ≈ 06:00 CEST): leaderboard snapshot
+#
+# Required repository secrets (Settings > Secrets and variables > Actions):
+#   BACKEND_URL  e.g. https://worldcup-predictor-api.onrender.com
+#   TASK_TOKEN   the value generated for the backend's TASK_TOKEN
+on:
+  schedule:
+    - cron: "0 */2 * * *"   # every 2 hours -> maintenance
+    - cron: "0 4 * * *"     # daily 04:00 UTC -> snapshot
+  workflow_dispatch: {}      # allow manual runs (runs maintenance)
+
+jobs:
+  maintenance:
+    if: github.event.schedule != '0 4 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger maintenance
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          TASK_TOKEN: ${{ secrets.TASK_TOKEN }}
+        run: |
+          curl -fsS -X POST "$BACKEND_URL/tasks/maintenance" \
+            -H "X-Task-Token: $TASK_TOKEN" \
+            --max-time 180 --retry 2 --retry-delay 30
+
+  snapshot:
+    if: github.event.schedule == '0 4 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger leaderboard snapshot
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          TASK_TOKEN: ${{ secrets.TASK_TOKEN }}
+        run: |
+          curl -fsS -X POST "$BACKEND_URL/tasks/snapshot" \
+            -H "X-Task-Token: $TASK_TOKEN" \
+            --max-time 180 --retry 2 --retry-delay 30

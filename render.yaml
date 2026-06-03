@@ -1,0 +1,47 @@
+# Render Blueprint for the FastAPI backend (free web service).
+# Deploy: push to GitHub, then in Render: New > Blueprint > pick this repo.
+# Secrets marked `sync: false` are entered in the Render dashboard after creation.
+services:
+  - type: web
+    name: worldcup-predictor-api
+    runtime: python
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+      - key: ENVIRONMENT
+        value: production
+      # In-process scheduler OFF — a GitHub Actions cron drives /tasks/* instead
+      # (the backend sleeps on the free plan, so external scheduling is required).
+      - key: SCHEDULER_ENABLED
+        value: "false"
+      # Auto-generated strong secrets:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: TASK_TOKEN
+        generateValue: true
+      # Set these in the Render dashboard (Environment tab):
+      - key: DATABASE_URL          # Neon: postgresql+psycopg://USER:PASS@HOST/DB?sslmode=require
+        sync: false
+      - key: APP_BASE_URL          # your Streamlit app URL, e.g. https://your-app.streamlit.app
+        sync: false
+      - key: EMAIL_PROVIDER
+        value: brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM            # your verified Brevo single-sender address
+        sync: false
+      - key: EMAIL_FROM_NAME
+        value: "World Cup Predictor"
+      - key: EMAIL_WHITELIST       # e.g. @yourcompany.com
+        sync: false
+      - key: ADMIN_EMAILS          # your email, to grant admin
+        sync: false
+      - key: API_FOOTBALL_KEY
+        sync: false
+      - key: GEMINI_API_KEY        # optional; enables the AI Match Centre
+        sync: false
