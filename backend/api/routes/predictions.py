@@ -1,0 +1,131 @@
+"""Prediction endpoints: windows, stage fixtures, submission, and admin seed."""
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from backend.api.deps import get_current_admin, get_current_user
+from backend.db.base import get_db
+from backend.db.models import User
+from backend.enums import Stage
+from backend.schemas import (
+    FixtureOut,
+    SeedOut,
+    StageFixturesOut,
+    SubmitPredictionsIn,
+    SubmitPredictionsOut,
+    WindowOut,
+)
+from backend.services import predictions as pred_service
+from backend.services import seeding
+
+router = APIRouter(prefix="/predictions", tags=["predictions"])
+
+
+def _require_tournament(db: Session):
+    tournament = seeding.get_active_tournament(db)
+    if tournament is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "No tournament has been seeded yet.",
+        )
+    return tournament
+
+
+def _parse_stage(value: str) -> Stage:
+    try:
+        return Stage(value)
+    except ValueError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown stage '{value}'.")
+
+
+@router.get("/windows", response_model=list[WindowOut])
+def get_windows(
+    _current: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> list[WindowOut]:
+    tournament = _require_tournament(db)
+    windows = pred_service.list_windows(db, tournament)
+    return [
+        WindowOut(
+            stage=w.stage.value,
+            opens_at=w.opens_at,
+            closes_at=w.closes_at,
+            state=pred_service.window_state(w),
+        )
+        for w in sorted(windows, key=lambda w: (w.closes_at or w.stage.value))
+    ]
+
+
+@router.get("/fixtures", response_model=StageFixturesOut)
+def get_stage_fixtures(
+    stage: str,
+    current: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> StageFixturesOut:
+    tournament = _require_tournament(db)
+    stage_enum = _parse_stage(stage)
+    window = pred_service.get_window(db, tournament, stage_enum)
+    matches = pred_service.list_stage_matches(db, tournament, stage_enum)
+    preds = pred_service.user_predictions_for_matches(db, current, [m.id for m in matches])
+
+    fixtures = []
+    for m in matches:
+        p = preds.get(m.id)
+        fixtures.append(
+            FixtureOut(
+                match_id=m.id,
+                stage=m.stage.value,
+                home_team=m.home_team.name if m.home_team else None,
+                away_team=m.away_team.name if m.away_team else None,
+                kickoff_utc=m.kickoff_utc,
+                stadium=m.stadium,
+                home_score=m.home_score,
+                away_score=m.away_score,
+                predicted_home_score=p.predicted_home_score if p else None,
+                predicted_away_score=p.predicted_away_score if p else None,
+            )
+        )
+
+    return StageFixturesOut(
+        stage=stage_enum.value,
+        state=pred_service.window_state(window),
+        fixtures=fixtures,
+    )
+
+
+@router.post("", response_model=SubmitPredictionsOut)
+def submit(
+    body: SubmitPredictionsIn,
+    current: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SubmitPredictionsOut:
+    tournament = _require_tournament(db)
+    stage_enum = _parse_stage(body.stage)
+    items = [(p.match_id, p.home_score, p.away_score) for p in body.predictions]
+    saved = pred_service.submit_predictions(db, current, tournament, stage_enum, items)
+    db.commit()
+    return SubmitPredictionsOut(saved=saved)
+
+
+@router.post("/admin/seed", response_model=SeedOut)
+def admin_seed(
+    _admin: User = Depends(get_current_admin), db: Session = Depends(get_db)
+) -> SeedOut:
+    """Pull fixtures (+ groups) from API-Football and seed the database."""
+    from backend.services import football_api
+
+    raw_fixtures = football_api.fetch_fixtures()
+    if not raw_fixtures:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "API-Football returned no fixtures (check API key / season).",
+        )
+    try:
+        groups = football_api.extract_groups(football_api.fetch_standings())
+    except Exception:
+        groups = {}  # standings optional; group letters are a nice-to-have
+
+    normalized = football_api.normalize_fixtures(raw_fixtures)
+    stats = seeding.seed_world_cup(db, normalized, groups)
+    db.commit()
+    return SeedOut(**stats)

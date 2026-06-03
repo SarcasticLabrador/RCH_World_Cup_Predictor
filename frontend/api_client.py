@@ -1,0 +1,222 @@
+"""Thin HTTP client for the backend API, used by the Streamlit app."""
+from __future__ import annotations
+
+import os
+
+import httpx
+
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
+_TIMEOUT = 15.0
+
+
+def request_link(email: str) -> dict:
+    r = httpx.post(f"{BACKEND_URL}/auth/request-link", json={"email": email}, timeout=_TIMEOUT)
+    r.raise_for_status()
+    return r.json()
+
+
+def verify(token: str) -> dict | None:
+    """Exchange a magic-link token for a session. Returns None if invalid/expired."""
+    r = httpx.get(f"{BACKEND_URL}/auth/verify", params={"token": token}, timeout=_TIMEOUT)
+    if r.status_code == 400:
+        return None
+    r.raise_for_status()
+    return r.json()
+
+
+def _auth_headers(session_token: str) -> dict:
+    return {"Authorization": f"Bearer {session_token}"}
+
+
+def get_me(session_token: str) -> dict | None:
+    r = httpx.get(f"{BACKEND_URL}/auth/me", headers=_auth_headers(session_token), timeout=_TIMEOUT)
+    if r.status_code == 401:
+        return None
+    r.raise_for_status()
+    return r.json()
+
+
+def update_profile(session_token: str, display_name: str) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/auth/me",
+        json={"display_name": display_name},
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+# --- Predictions (Phase 3) ---
+
+def get_windows(session_token: str) -> list[dict]:
+    r = httpx.get(
+        f"{BACKEND_URL}/predictions/windows",
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    if r.status_code == 404:  # nothing seeded yet
+        return []
+    r.raise_for_status()
+    return r.json()
+
+
+def get_stage_fixtures(session_token: str, stage: str) -> dict | None:
+    r = httpx.get(
+        f"{BACKEND_URL}/predictions/fixtures",
+        params={"stage": stage},
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    if r.status_code == 404:
+        return None
+    r.raise_for_status()
+    return r.json()
+
+
+def submit_predictions(session_token: str, stage: str, items: list[dict]) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/predictions",
+        json={"stage": stage, "predictions": items},
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+# --- Admin (Phase 4) ---
+
+def admin_set_match_result(
+    session_token: str, match_id: str, home: int, away: int, finished: bool = True
+) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/admin/match-result",
+        json={"match_id": match_id, "home_score": home, "away_score": away, "finished": finished},
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def admin_set_special_result(session_token: str, category: str, value: str) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/admin/special-result",
+        json={"category": category, "actual_value": value},
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def admin_refresh_results(session_token: str) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/admin/refresh-results",
+        headers=_auth_headers(session_token),
+        timeout=60.0,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def admin_rescore(session_token: str) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/admin/rescore",
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def admin_run_maintenance(session_token: str) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/admin/run-maintenance",
+        headers=_auth_headers(session_token),
+        timeout=120.0,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def admin_snapshot(session_token: str) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/admin/snapshot",
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def admin_team_stats(session_token: str) -> list[dict]:
+    r = httpx.get(
+        f"{BACKEND_URL}/admin/team-stats",
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+# --- Specials & leaderboard (Phase 5) ---
+
+def get_specials(session_token: str) -> dict | None:
+    r = httpx.get(
+        f"{BACKEND_URL}/specials", headers=_auth_headers(session_token), timeout=_TIMEOUT
+    )
+    if r.status_code == 404:
+        return None
+    r.raise_for_status()
+    return r.json()
+
+
+def submit_specials(session_token: str, items: list[dict]) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/specials",
+        json={"predictions": items},
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def get_teams(session_token: str) -> list[dict]:
+    r = httpx.get(
+        f"{BACKEND_URL}/specials/teams",
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    if r.status_code == 404:
+        return []
+    r.raise_for_status()
+    return r.json()
+
+
+def get_leaderboard(session_token: str, scope: str = "overall") -> dict | None:
+    r = httpx.get(
+        f"{BACKEND_URL}/leaderboard",
+        params={"scope": scope},
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    if r.status_code == 404:
+        return None
+    r.raise_for_status()
+    return r.json()
+
+
+def get_match_centre(session_token: str, news: bool = False, refresh: bool = False) -> dict | None:
+    r = httpx.get(
+        f"{BACKEND_URL}/ai/match-centre",
+        params={"news": news, "refresh": refresh},
+        headers=_auth_headers(session_token),
+        timeout=60.0,
+    )
+    if r.status_code == 404:
+        return None
+    r.raise_for_status()
+    return r.json()

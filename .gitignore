@@ -1,0 +1,21 @@
+# Environment
+.env
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Database (persistent volume / local dev file)
+*.db
+*.db-journal
+*.sqlite3
+data/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
