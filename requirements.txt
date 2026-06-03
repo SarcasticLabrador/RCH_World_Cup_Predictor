@@ -16,7 +16,7 @@ streamlit==1.41.1
 
 # --- Database driver (Phase 8: managed Postgres for deployment) ---
 # SQLite is built in for local dev; psycopg (v3) is used for Neon/Supabase.
-psycopg[binary]==3.2.3
+psycopg[binary]>=3.2
 
 # --- Scheduler (Phase 6) ---
 APScheduler==3.10.4
