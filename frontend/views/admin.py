@@ -117,7 +117,51 @@ def render() -> None:
 
     st.divider()
 
-    # --- Team stats (transparency) ---
+    # --- Account management ---
+    st.subheader("Account management")
+    tab1, tab2 = st.tabs(["Reset password", "Create account"])
+
+    with tab1:
+        st.caption("Reset a colleague's password on their behalf.")
+        rp_email = st.text_input("Email address", key="rp_email")
+        rp_pw = st.text_input("New password (min 8 characters)", type="password", key="rp_pw")
+        if st.button("Reset password", key="rp_btn", type="primary"):
+            if not rp_email or not rp_pw:
+                st.warning("Fill in both fields.")
+            elif len(rp_pw) < 8:
+                st.warning("Password must be at least 8 characters.")
+            else:
+                try:
+                    api_client.admin_reset_password(token, rp_email.strip(), rp_pw)
+                    st.success(f"Password reset for {rp_email}.")
+                except Exception as e:
+                    msg = str(e)
+                    if "404" in msg:
+                        st.error("No account found with that email.")
+                    else:
+                        st.error("Reset failed — please try again.")
+
+    with tab2:
+        st.caption("Create an account on behalf of a colleague. Bypasses the email whitelist.")
+        cu_name = st.text_input("Display name", key="cu_name")
+        cu_email = st.text_input("Email address", key="cu_email")
+        cu_pw = st.text_input("Password (min 8 characters)", type="password", key="cu_pw")
+        cu_admin = st.checkbox("Grant admin rights", key="cu_admin")
+        if st.button("Create account", key="cu_btn", type="primary"):
+            if not cu_name or not cu_email or not cu_pw:
+                st.warning("Fill in all fields.")
+            elif len(cu_pw) < 8:
+                st.warning("Password must be at least 8 characters.")
+            else:
+                try:
+                    result = api_client.admin_create_user(token, cu_email.strip(), cu_pw, cu_name.strip(), cu_admin)
+                    st.success(f"Account created for {result['display_name']} ({result['email']}).")
+                except Exception as e:
+                    msg = str(e)
+                    if "409" in msg:
+                        st.error("An account with that email already exists.")
+                    else:
+                        st.error("Account creation failed — please try again.")
     st.subheader("Team stats (computed)")
     try:
         stats = api_client.admin_team_stats(token)
