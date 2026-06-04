@@ -50,7 +50,7 @@ def logout() -> None:
 
 def _login_form() -> None:
     st.subheader("Sign in")
-    st.caption("Enter your work email and we'll send you a one-time sign-in link.")
+    st.caption("Enter your email to receive a one-time sign-in link. Note: This only works for emails ending with @robeco.com or @robeco.nl")
     if err := st.session_state.pop("login_error", None):
         st.error(err)
 
