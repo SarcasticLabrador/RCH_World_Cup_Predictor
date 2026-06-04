@@ -1,4 +1,4 @@
-"""Pydantic schemas for API requests/responses (shared across routers)."""
+"""Pydantic schemas for API requests/responses."""
 from __future__ import annotations
 
 import uuid
@@ -23,7 +23,6 @@ class UserOut(BaseModel):
     email: EmailStr
     display_name: str | None
     is_admin: bool
-
     model_config = {"from_attributes": True}
 
 
@@ -36,13 +35,13 @@ class UpdateProfileIn(BaseModel):
     display_name: str
 
 
-# --- Predictions (Phase 3) ---
+# --- Predictions ---
 
 class WindowOut(BaseModel):
     stage: str
     opens_at: datetime | None
     closes_at: datetime | None
-    state: str  # pending | not_open_yet | open | closed
+    state: str
 
 
 class FixtureOut(BaseModel):
@@ -54,6 +53,8 @@ class FixtureOut(BaseModel):
     stadium: str | None
     home_score: int | None
     away_score: int | None
+    penalty_home_score: int | None = None
+    penalty_away_score: int | None = None
     predicted_home_score: int | None
     predicted_away_score: int | None
 
@@ -81,7 +82,7 @@ class SubmitPredictionsOut(BaseModel):
 
 class ResetPredictionsIn(BaseModel):
     stage: str
-    group: str | None = None  # e.g. "A" to reset one group; None resets all
+    group: str | None = None
 
 
 class SeedOut(BaseModel):
@@ -90,15 +91,66 @@ class SeedOut(BaseModel):
     matches_created: int
     matches_updated: int
     windows: int
+    bracket_slots: int = 0
 
 
-# --- Admin: results & scoring (Phase 4) ---
+# --- Bracket slots & predictions ---
+
+class BracketSlotOut(BaseModel):
+    slot_id: uuid.UUID
+    match_number: int
+    stage: str
+    home_descriptor: str
+    away_descriptor: str
+    kickoff_utc: datetime
+    venue: str | None
+    home_team: str | None    # set once teams qualify
+    away_team: str | None
+    home_score: int | None
+    away_score: int | None
+    penalty_home_score: int | None = None
+    penalty_away_score: int | None = None
+    status: str
+    # User's prediction for this slot (null if not yet submitted).
+    predicted_home_score: int | None = None
+    predicted_away_score: int | None = None
+    # Derived teams from user's bracket (may differ from confirmed teams).
+    derived_home_team: str | None = None
+    derived_away_team: str | None = None
+
+
+class BracketSlotsOut(BaseModel):
+    slots: list[BracketSlotOut]
+
+
+class BracketPredictionItemIn(BaseModel):
+    slot_id: uuid.UUID
+    home_score: int = Field(ge=0)
+    away_score: int = Field(ge=0)
+
+
+class SubmitBracketPredictionsIn(BaseModel):
+    predictions: list[BracketPredictionItemIn]
+
+
+# --- Admin: results & scoring ---
 
 class MatchResultIn(BaseModel):
     match_id: uuid.UUID
     home_score: int = Field(ge=0)
     away_score: int = Field(ge=0)
-    finished: bool = True  # set False to revert a match to "not played"
+    penalty_home_score: int | None = Field(default=None, ge=0)
+    penalty_away_score: int | None = Field(default=None, ge=0)
+    finished: bool = True
+
+
+class BracketResultIn(BaseModel):
+    match_number: int
+    home_score: int = Field(ge=0)
+    away_score: int = Field(ge=0)
+    penalty_home_score: int | None = Field(default=None, ge=0)
+    penalty_away_score: int | None = Field(default=None, ge=0)
+    finished: bool = True
 
 
 class SpecialResultIn(BaseModel):
@@ -120,7 +172,7 @@ class TeamStatOut(BaseModel):
     goals_against_per_game: float
 
 
-# --- Specials, teams, leaderboard (Phase 5) ---
+# --- Specials ---
 
 class TeamOut(BaseModel):
     name: str
@@ -128,9 +180,9 @@ class TeamOut(BaseModel):
 
 
 class SpecialsOut(BaseModel):
-    state: str  # open | closed | pending
+    state: str
     categories: list[str]
-    predictions: dict[str, str]  # category -> current value
+    predictions: dict[str, str]
 
 
 class SpecialItemIn(BaseModel):
@@ -146,6 +198,8 @@ class SubmitSpecialsOut(BaseModel):
     saved: int
 
 
+# --- Admin account management ---
+
 class ResetPasswordIn(BaseModel):
     email: EmailStr
     new_password: str = Field(min_length=8)
@@ -158,44 +212,29 @@ class CreateUserIn(BaseModel):
     is_admin: bool = False
 
 
+# --- Leaderboard ---
+
 class LeaderboardRowOut(BaseModel):
-    rank: int
     user_id: uuid.UUID
     display_name: str
-    points: int
+    match_pts: int
+    award_pts: int
+    total_pts: int
+    match_pts_rank: int
+    award_pts_rank: int
+    total_pts_rank: int
     previous_rank: int | None = None
 
 
 class LeaderboardOut(BaseModel):
-    scope: str
     rows: list[LeaderboardRowOut]
 
 
-# --- AI Match Centre (Phase 7) ---
-
-class FixtureCardOut(BaseModel):
-    home: str | None
-    away: str | None
-    stage: str
-    kickoff_utc: str
-    stadium: str | None
-    home_score: int | None
-    away_score: int | None
-
-
-class MatchCentreOut(BaseModel):
-    ai_available: bool
-    used_search: bool
-    summary: str | None
-    recent: list[FixtureCardOut]
-    upcoming: list[FixtureCardOut]
-
-
-# --- AI Match Centre (Phase 7) ---
+# --- AI Match Centre ---
 
 class FixtureBriefOut(BaseModel):
-    home: str
-    away: str
+    home: str | None
+    away: str | None
     stage: str
     kickoff_utc: datetime
     stadium: str | None
