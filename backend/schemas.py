@@ -79,6 +79,11 @@ class SubmitPredictionsOut(BaseModel):
     saved: int
 
 
+class ResetPredictionsIn(BaseModel):
+    stage: str
+    group: str | None = None  # e.g. "A" to reset one group; None resets all
+
+
 class SeedOut(BaseModel):
     tournament: str
     teams: int
