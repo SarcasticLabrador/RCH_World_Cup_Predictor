@@ -1,46 +1,49 @@
-"""Agreed scoring rules, kept as plain constants for easy tweaking.
+"""Scoring rules for the bracket simulation game.
 
-This module only *declares* the point values. The scoring engine that applies
-them is built in Phase 4. Centralising them here means future adjustments
-(you mentioned the knockout values may need tweaking) are a one-line change.
+Group stage (per match):
+  Correct tendency (W/D/L)  2 pts
+  + Exact scoreline         3 pts extra  (total 5 if exact)
+
+Knockout rounds excl. final (per bracket slot):
+  Correct advancing team    2 pts  (position-based: higher predicted score)
+  + Exact scoreline         3 pts extra  (penalty score used where applicable)
+
+Final slot:
+  Correct champion          25 pts  (position-based winner)
+  Correct runner-up         10 pts  (awarded together with champion)
+  Exact scoreline           15 pts extra
+
+Individual awards:
+  Named categories          10 pts  (exact match)
+  Numeric categories        10 pts  (closest wins; ties share)
+  Fastest goal              10 pts  (exact minute; falls back to closest)
 """
 from __future__ import annotations
 
 from backend.enums import SpecialCategory, Stage
 
-# --- Match predictions (group + knockout R32..SF) ---
-# Per your decision: knockouts use the same group-stage-style scoring to avoid
-# point inflation. Exact score and correct-result are NOT additive — exact
-# score (the higher tier) supersedes correct-result.
-POINTS_EXACT_SCORE = 5
-POINTS_CORRECT_RESULT = 2
+# --- Group stage ---
+GROUP_TENDENCY_PTS = 2
+GROUP_EXACT_BONUS = 3   # awarded in addition to tendency
 
-# Reserved multiplier per stage for future tweaking. All 1.0 today so every
-# match round currently scores identically; bump a value to scale a round.
-STAGE_MULTIPLIER: dict[Stage, float] = {
-    Stage.GROUP: 1.0,
-    Stage.R32: 1.0,
-    Stage.R16: 1.0,
-    Stage.QF: 1.0,
-    Stage.SF: 1.0,
-    Stage.FINAL: 1.0,  # Final match score handled by FINAL_* below, not this.
-}
+# --- Knockout (non-final) ---
+KO_WINNER_PTS = 2
+KO_EXACT_BONUS = 3
 
-# --- The Final (independent / additive) ---
-# Champion + runner-up are predicted pre-tournament (special predictions).
-# The exact final score is its own prediction window opening after the SFs.
-POINTS_FINAL_CHAMPION = 25
-POINTS_FINAL_RUNNER_UP = 10
-POINTS_FINAL_EXACT_SCORE = 15
+# --- Final ---
+FINAL_CHAMPION_PTS = 25
+FINAL_RUNNER_UP_PTS = 10   # awarded alongside champion (same pick)
+FINAL_EXACT_BONUS = 15
 
-# --- Special predictions (all submitted pre-tournament) ---
-SPECIAL_POINTS: dict[SpecialCategory, int] = {
-    SpecialCategory.GOLDEN_BALL: 10,
-    SpecialCategory.GOLDEN_BOOT: 10,
-    SpecialCategory.GOLDEN_GLOVE: 10,
-    SpecialCategory.BEST_YOUNG_PLAYER: 10,
-    SpecialCategory.MOST_GOALS_PER_GAME: 10,
-    SpecialCategory.FEWEST_CONCEDED_PER_GAME: 10,
-    SpecialCategory.CHAMPION: POINTS_FINAL_CHAMPION,
-    SpecialCategory.RUNNER_UP: POINTS_FINAL_RUNNER_UP,
+# --- Individual awards ---
+AWARD_EXACT_PTS = 10    # named categories and team_most_goals
+AWARD_CLOSEST_PTS = 10  # numeric categories (closest prediction wins)
+
+# Numeric categories scored by closest-wins (not exact-only).
+NUMERIC_CATEGORIES: set[SpecialCategory] = {
+    SpecialCategory.TOTAL_GOALS,
+    SpecialCategory.YELLOW_CARDS,
+    SpecialCategory.RED_CARDS,
+    SpecialCategory.FASTEST_GOAL,   # falls back to closest if no exact
+    SpecialCategory.BIGGEST_MARGIN,
 }
