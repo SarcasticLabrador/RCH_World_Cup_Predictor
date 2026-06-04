@@ -47,6 +47,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     display_name: Mapped[str | None] = mapped_column(String(80))
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     magic_links: Mapped[list["MagicLink"]] = relationship(
