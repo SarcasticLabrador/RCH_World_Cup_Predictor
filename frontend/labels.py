@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-_CET = ZoneInfo("Europe/Berlin")  # CET / CEST
+_CET = ZoneInfo("Europe/Berlin")
 
 STAGE_LABELS = {
     "group": "Group Stage",
@@ -22,33 +22,27 @@ STATE_LABELS = {
     "pending": "… Awaiting fixtures",
 }
 
-# Special-prediction categories. Auto = derived from match data (override
-# still possible); Manual = must be entered by the admin.
-SPECIAL_LABELS = {
-    "champion": ("Champion", "auto"),
-    "runner_up": ("Runner-up", "auto"),
-    "most_goals_per_game": ("Most goals scored / game", "auto"),
-    "fewest_conceded_per_game": ("Fewest goals conceded / game", "auto"),
-    "golden_ball": ("Golden Ball", "manual"),
-    "golden_boot": ("Golden Boot", "manual"),
-    "golden_glove": ("Golden Glove", "manual"),
-    "best_young_player": ("Best Young Player", "manual"),
+SPECIAL_LABELS: dict[str, tuple[str, str]] = {
+    # (display_name, input_type: "player" | "team" | "number")
+    "golden_ball":       ("Golden Ball",               "player"),
+    "golden_boot":       ("Golden Boot",               "player"),
+    "golden_glove":      ("Golden Glove",              "player"),
+    "best_young_player": ("Best Young Player",         "player"),
+    "team_most_goals":   ("Team — most goals scored",  "team"),
+    "total_goals":       ("Total goals in tournament", "number"),
+    "yellow_cards":      ("Yellow cards",              "number"),
+    "red_cards":         ("Red cards",                 "number"),
+    "fastest_goal":      ("Fastest goal (minute)",     "number"),
+    "biggest_margin":    ("Biggest winning margin",    "number"),
 }
 
+SPECIAL_ORDER = list(SPECIAL_LABELS.keys())
 
-# Which special categories are team picks (dropdown) vs free-text player picks.
-TEAM_SPECIALS = {"champion", "runner_up", "most_goals_per_game", "fewest_conceded_per_game"}
-
-# Leaderboard scopes.
-SCOPE_LABELS = {
-    "overall": "Overall",
-    "group": "Group Stage",
-    "r32": "Round of 32",
-    "r16": "Round of 16",
-    "qf": "Quarter-finals",
-    "sf": "Semi-finals",
-    "final": "Final",
-    "specials": "Awards & Specials",
+# Leaderboard sort options.
+LEADERBOARD_VIEWS = {
+    "total_pts":  "Overall",
+    "match_pts":  "Match predictions",
+    "award_pts":  "Individual awards",
 }
 
 
@@ -56,10 +50,11 @@ def stage_label(stage: str) -> str:
     return STAGE_LABELS.get(stage, stage)
 
 
-def to_cet(iso_utc: str | None) -> str:
-    """Format an ISO-8601 UTC timestamp as local CET/CEST for display."""
+def to_cet(iso_utc: str | datetime | None) -> str:
     if not iso_utc:
         return "TBD"
-    dt = datetime.fromisoformat(iso_utc).astimezone(_CET)
+    if isinstance(iso_utc, str):
+        iso_utc = datetime.fromisoformat(iso_utc)
+    dt = iso_utc.astimezone(_CET)
     tzname = dt.tzname() or "CET"
     return dt.strftime(f"%a %d %b %Y, %H:%M ({tzname})")
