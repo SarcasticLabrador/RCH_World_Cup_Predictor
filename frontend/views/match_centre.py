@@ -16,7 +16,7 @@ def _fixture_line(fx: dict, played: bool) -> str:
 
 
 def render() -> None:
-    st.header("🤖 AI Match Centre")
+    st.header("World Cup News Update")
     token = st.session_state["session_token"]
 
     c1, c2 = st.columns([3, 1])
