@@ -23,6 +23,7 @@ except Exception:
 from frontend import api_client
 from frontend.auth import logout, require_login
 from frontend.views import admin as admin_view
+from frontend.views import fixtures as fixtures_view
 from frontend.views import home as home_view
 from frontend.views import leaderboard as leaderboard_view
 from frontend.views import match_centre as match_centre_view
@@ -48,10 +49,11 @@ if not user.get("display_name"):
 # Sidebar: account info + navigation
 pages = {
     "🏠 Home": home_view.render,
-    "🔮 My Predictions": predictions_view.render,
-    "🏅 My Picks": specials_view.render,
+    "📅 Fixtures & Results": fixtures_view.render,
+    "🔮 Match predictions": predictions_view.render,
+    "🏅 Individual awards": specials_view.render,
     "🏆 Leaderboard": leaderboard_view.render,
-    "🤖 AI Match Centre": match_centre_view.render,
+    "📰 Football news update (Experimental)": match_centre_view.render,
 }
 if user.get("is_admin"):
     pages["⚙️ Admin"] = admin_view.render
