@@ -155,3 +155,16 @@ def snapshot(
     written = tasks.snapshot_leaderboard(db, tournament)
     db.commit()
     return {"snapshot_rows": written}
+
+
+@router.post("/seed-manual", response_model=dict)
+def seed_manual(
+    _admin: User = Depends(get_current_admin), db: Session = Depends(get_db)
+) -> dict:
+    """Seed all 72 group stage fixtures from the hardcoded 2026 World Cup schedule."""
+    from backend.services import seeding
+    from backend.services.wc2026_fixtures import get_2026_fixtures, get_2026_groups
+
+    stats = seeding.seed_world_cup(db, get_2026_fixtures(), get_2026_groups())
+    db.commit()
+    return stats
