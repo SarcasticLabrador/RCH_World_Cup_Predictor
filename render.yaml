@@ -25,9 +25,9 @@ services:
       - key: TASK_TOKEN
         generateValue: true
       # Set these in the Render dashboard (Environment tab):
-      - key: postgresql://neondb_owner:npg_rUTv85SiZVjO@ep-flat-mode-a2fd113v.eu-central-1.aws.neon.tech/neondb?sslmode=require   # Neon: postgresql+psycopg://USER:PASS@HOST/DB?sslmode=require
+      - key: DATABASE_URL   # Neon: postgresql+psycopg://USER:PASS@HOST/DB?sslmode=require
         sync: false
-      - key: rchworldcuppredictor.streamlit.app     # Streamlit app URL
+      - key: APP_BASE_URL     # Streamlit app URL
         sync: false
       - key: EMAIL_PROVIDER
         value: brevo
