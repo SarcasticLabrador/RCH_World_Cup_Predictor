@@ -199,28 +199,57 @@ def assign_third_to_slots(
 ) -> dict[int, str]:
     """Assign the best N third-placed teams to the correct R32 slots.
 
-    Uses a greedy algorithm: processes slots in order of most-constrained
-    (fewest qualifying teams eligible for that slot) first.
+    Uses MRV (minimum remaining values) with backtracking:
+      - Always picks the most constrained remaining slot.
+      - Tries eligible groups ordered by their own constraint (fewest remaining
+        slots available), breaking ties by rank (best first).
+      - Backtracks if a dead end is reached (no eligible group for a slot).
+
+    Guaranteed to find a valid assignment if one exists, which it always does
+    for the 2026 World Cup bracket structure across all 495 combinations of
+    8 qualifying groups from 12.
+
     Returns {match_number: team_name}.
     """
     qualifying = ranked_thirds[:top_n]
-    qualifying_groups = {g for g, _ in qualifying}
     group_to_team = {g: name for g, name in qualifying}
+    group_rank = {g: i for i, (g, _) in enumerate(qualifying)}
 
-    # Sort slots: most constrained (fewest eligible qualifiers) first.
-    def constraint(mn: int) -> int:
-        return len([g for g in slot_eligibility[mn] if g in qualifying_groups])
+    def _solve(
+        remaining_groups: frozenset,
+        remaining_slots: frozenset,
+        assigned: dict[int, str],
+    ) -> dict[int, str] | None:
+        if not remaining_slots:
+            return assigned
 
-    assigned: dict[int, str] = {}
-    remaining_groups = set(qualifying_groups)
+        def slot_options(mn: int) -> list[str]:
+            return [g for g in slot_eligibility[mn] if g in remaining_groups]
 
-    for mn in sorted(slot_eligibility.keys(), key=constraint):
-        eligible = [g for g in slot_eligibility[mn] if g in remaining_groups]
-        # Assign the best-ranked team from eligible groups.
-        for group, _ in qualifying:
-            if group in eligible:
-                assigned[mn] = group_to_team[group]
-                remaining_groups.discard(group)
-                break
+        # Most constrained slot (fewest eligible groups).
+        best_slot = min(remaining_slots, key=lambda mn: len(slot_options(mn)))
+        eligible = slot_options(best_slot)
 
-    return assigned
+        if not eligible:
+            return None  # dead end — backtrack
+
+        new_slots = remaining_slots - {best_slot}
+
+        # Order candidates: most-constrained group first (fewest remaining slots),
+        # tie-break by rank (lower index = better team).
+        def group_slot_count(g: str) -> int:
+            return sum(1 for mn in new_slots if g in slot_eligibility[mn])
+
+        for group in sorted(eligible, key=lambda g: (group_slot_count(g), group_rank[g])):
+            result = _solve(
+                remaining_groups - {group},
+                new_slots,
+                {**assigned, best_slot: group_to_team[group]},
+            )
+            if result is not None:
+                return result
+
+        return None  # all candidates failed — backtrack
+
+    qualifying_groups = frozenset(g for g, _ in qualifying)
+    return _solve(qualifying_groups, frozenset(slot_eligibility.keys()), {}) or {}
