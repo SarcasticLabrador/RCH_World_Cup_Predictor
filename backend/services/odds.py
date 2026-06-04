@@ -28,18 +28,24 @@ log = logging.getLogger(__name__)
 # Name normalisation                                                           #
 # --------------------------------------------------------------------------- #
 
-# The Odds API name → our database name (FIFA official)
+# The Odds API name → our database name (FIFA 2026 fixtures spelling)
 _ODDS_NAME_MAP: dict[str, str] = {
-    "united states":        "united states",
-    "usa":                  "united states",
-    "south korea":          "south korea",
-    "korea republic":       "south korea",
-    "ivory coast":          "côte d'ivoire",
-    "cote d'ivoire":        "côte d'ivoire",
-    "iran":                 "iran",
-    "ir iran":              "iran",
-    "bosnia and herzegovina": "bosnia & herzegovina",
-    "cape verde islands":   "cape verde",
+    "united states":            "united states",
+    "usa":                      "united states",
+    "south korea":              "south korea",
+    "korea republic":           "south korea",
+    "ivory coast":              "côte d'ivoire",
+    "cote d'ivoire":            "côte d'ivoire",
+    "iran":                     "iran",
+    "ir iran":                  "iran",
+    "bosnia and herzegovina":   "bosnia & herzegovina",
+    "cape verde islands":       "cape verde",
+    # Name changes — Odds API may use old or new spelling
+    "czech republic":           "czechia",
+    "czechia":                  "czechia",
+    "turkey":                   "turkiye",
+    "turkiye":                  "turkiye",
+    "türkiye":                  "turkiye",
 }
 
 
