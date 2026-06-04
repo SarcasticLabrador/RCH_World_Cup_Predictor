@@ -1,4 +1,4 @@
-"""Prediction endpoints: windows, stage fixtures, submission, and admin seed."""
+"""Prediction endpoints: windows, stage fixtures, submission, reset, and admin seed."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -10,6 +10,7 @@ from backend.db.models import User
 from backend.enums import Stage
 from backend.schemas import (
     FixtureOut,
+    ResetPredictionsIn,
     SeedOut,
     StageFixturesOut,
     SubmitPredictionsIn,
@@ -25,10 +26,7 @@ router = APIRouter(prefix="/predictions", tags=["predictions"])
 def _require_tournament(db: Session):
     tournament = seeding.get_active_tournament(db)
     if tournament is None:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            "No tournament has been seeded yet.",
-        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No tournament has been seeded yet.")
     return tournament
 
 
@@ -107,6 +105,20 @@ def submit(
     return SubmitPredictionsOut(saved=saved)
 
 
+@router.post("/reset", response_model=SubmitPredictionsOut)
+def reset(
+    body: ResetPredictionsIn,
+    current: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SubmitPredictionsOut:
+    """Delete a user's predictions for a stage (or a single group within it)."""
+    tournament = _require_tournament(db)
+    stage_enum = _parse_stage(body.stage)
+    deleted = pred_service.reset_predictions(db, current, tournament, stage_enum, body.group)
+    db.commit()
+    return SubmitPredictionsOut(saved=deleted)
+
+
 @router.post("/admin/seed", response_model=SeedOut)
 def admin_seed(
     _admin: User = Depends(get_current_admin), db: Session = Depends(get_db)
@@ -123,7 +135,7 @@ def admin_seed(
     try:
         groups = football_api.extract_groups(football_api.fetch_standings())
     except Exception:
-        groups = {}  # standings optional; group letters are a nice-to-have
+        groups = {}
 
     normalized = football_api.normalize_fixtures(raw_fixtures)
     stats = seeding.seed_world_cup(db, normalized, groups)
