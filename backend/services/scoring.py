@@ -240,6 +240,37 @@ def score_special_predictions(db: Session, tournament: Tournament) -> int:
     return scored
 
 
+# --- Team stats (used by admin /team-stats endpoint) ---------------------
+
+def compute_team_stats(db: Session, tournament: Tournament) -> dict[str, dict]:
+    """Per-team goals for/against and games played, from finished group matches."""
+    from collections import defaultdict
+    from sqlalchemy import select as _select
+    teams = {
+        t.id: t.name
+        for t in db.scalars(_select(Team).where(Team.tournament_id == tournament.id)).all()
+    }
+    stats: dict[str, dict] = defaultdict(lambda: {"gf": 0, "ga": 0, "games": 0})
+    for m in db.scalars(
+        _select(Match).where(
+            Match.tournament_id == tournament.id,
+            Match.status == MatchStatus.FINISHED,
+        )
+    ).all():
+        if m.home_score is None:
+            continue
+        h, a = teams.get(m.home_team_id), teams.get(m.away_team_id)
+        if h:
+            stats[h]["gf"] += m.home_score
+            stats[h]["ga"] += m.away_score
+            stats[h]["games"] += 1
+        if a:
+            stats[a]["gf"] += m.away_score
+            stats[a]["ga"] += m.home_score
+            stats[a]["games"] += 1
+    return dict(stats)
+
+
 # --- Combined tournament scoring -----------------------------------------
 
 def score_tournament(db: Session, tournament: Tournament) -> dict:
