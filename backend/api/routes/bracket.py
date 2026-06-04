@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.api.deps import get_current_admin, get_current_user
@@ -35,8 +35,18 @@ def get_slots(
     current: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> BracketSlotsOut:
-    """Return all bracket slots with user's predictions and derived teams."""
+    """Return all bracket slots with user's predictions and derived teams.
+
+    Seeds bracket slots automatically on first call if not yet present.
+    """
     tournament = _tournament(db)
+
+    existing_count = db.scalar(
+        select(func.count(BracketSlot.id)).where(BracketSlot.tournament_id == tournament.id)
+    )
+    if not existing_count:
+        seeding.seed_bracket_slots(db, tournament)
+        db.commit()
 
     slots = db.scalars(
         select(BracketSlot)
