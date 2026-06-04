@@ -8,7 +8,7 @@ from frontend.labels import SCOPE_LABELS
 
 
 def render() -> None:
-    st.header("🏆 Leaderboard")
+    st.header("Leaderboard")
     token = st.session_state["session_token"]
     me = st.session_state["user"]["id"]
 
