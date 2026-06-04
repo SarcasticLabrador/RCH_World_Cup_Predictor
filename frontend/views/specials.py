@@ -8,7 +8,7 @@ from frontend.labels import SPECIAL_LABELS, STATE_LABELS, TEAM_SPECIALS
 
 
 def render() -> None:
-    st.header("My Picks")
+    st.header("🏅 My Picks")
     st.caption(
         "Champion (25 pts), runner-up (10 pts) and the awards/team stats "
         "(10 pts each). These lock when the first group match kicks off."
@@ -62,3 +62,19 @@ def render() -> None:
             st.success(f"Saved {resp['saved']} pick(s).")
         except Exception:
             st.error("Couldn't save — picks may have just locked. Try reloading.")
+
+    if editable:
+        st.divider()
+        with st.expander("⚠️ Reset all individual award picks"):
+            st.warning("This clears every pick you've made. Cannot be undone.")
+            confirmed = st.checkbox("I understand", key="confirm_reset_specials")
+            if st.button("Reset all picks", disabled=not confirmed, key="do_reset_specials"):
+                try:
+                    api_client.reset_specials(token)
+                    st.success("All picks cleared.")
+                    st.rerun()
+                except Exception as e:
+                    if "409" in str(e):
+                        st.error("Picks are locked and can no longer be reset.")
+                    else:
+                        st.error("Reset failed — please try again.")
