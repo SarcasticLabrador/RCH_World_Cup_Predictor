@@ -123,3 +123,46 @@ def submit_predictions(
 
     db.flush()
     return saved
+
+
+def reset_predictions(
+    db: Session,
+    user: User,
+    tournament: Tournament,
+    stage: Stage,
+    group: str | None = None,
+) -> int:
+    """Delete a user's predictions for a stage (or a single group within it).
+
+    Only allowed while the prediction window is open.
+    """
+    window = get_window(db, tournament, stage)
+    if window_state(window) != "open":
+        raise HTTPException(
+            http_status.HTTP_409_CONFLICT,
+            "Predictions for this stage are locked.",
+        )
+
+    matches = list_stage_matches(db, tournament, stage)
+
+    if group:
+        matches = [
+            m for m in matches
+            if (m.home_team and m.home_team.group == group)
+            or (m.away_team and m.away_team.group == group)
+        ]
+
+    match_ids = [m.id for m in matches]
+    if not match_ids:
+        return 0
+
+    deleted = (
+        db.query(Prediction)
+        .filter(
+            Prediction.user_id == user.id,
+            Prediction.match_id.in_(match_ids),
+        )
+        .delete(synchronize_session=False)
+    )
+    db.flush()
+    return deleted
