@@ -23,17 +23,22 @@ BACKEND_URL = _resolve_backend_url()
 _TIMEOUT = 15.0
 
 
-def request_link(email: str) -> dict:
-    r = httpx.post(f"{BACKEND_URL}/auth/request-link", json={"email": email}, timeout=_TIMEOUT)
+def register(email: str, password: str, display_name: str) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/auth/register",
+        json={"email": email, "password": password, "display_name": display_name},
+        timeout=_TIMEOUT,
+    )
     r.raise_for_status()
     return r.json()
 
 
-def verify(token: str) -> dict | None:
-    """Exchange a magic-link token for a session. Returns None if invalid/expired."""
-    r = httpx.get(f"{BACKEND_URL}/auth/verify", params={"token": token}, timeout=_TIMEOUT)
-    if r.status_code == 400:
-        return None
+def login(email: str, password: str) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/auth/login",
+        json={"email": email, "password": password},
+        timeout=_TIMEOUT,
+    )
     r.raise_for_status()
     return r.json()
 
