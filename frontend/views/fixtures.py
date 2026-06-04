@@ -58,28 +58,23 @@ def _render_group_stage(token: str) -> None:
         st.info("Group stage fixtures not loaded yet.")
         return
 
-    fixtures = data["fixtures"]
-
-    # Group by CET date for the matchday header
-    by_date: dict[str, list] = defaultdict(list)
-    for fx in fixtures:
-        by_date[_cet_date_label(fx["kickoff_utc"])].append(fx)
-
-    # Within each date, sub-group by tournament group letter
-    for date_label, day_fixtures in by_date.items():
-        st.markdown(f"**{date_label}**")
-        by_group: dict[str, list] = defaultdict(list)
-        for fx in day_fixtures:
-            grp = GROUP_MAP.get(fx.get("home_team") or "", "?")
+    all_fixtures = data["fixtures"]
+    by_group: dict[str, list] = {g: [] for g in "ABCDEFGHIJKL"}
+    for fx in all_fixtures:
+        grp = GROUP_MAP.get(fx.get("home_team") or "") or GROUP_MAP.get(fx.get("away_team") or "")
+        if grp:
             by_group[grp].append(fx)
 
-        for grp in sorted(by_group.keys()):
-            st.caption(f"Group {grp}")
-            matches = by_group[grp]
-            cols = st.columns(min(len(matches), 2))
-            for i, fx in enumerate(matches):
+    tabs = st.tabs([f"Group {g}" for g in "ABCDEFGHIJKL"])
+    for tab, group in zip(tabs, "ABCDEFGHIJKL"):
+        with tab:
+            fixtures = sorted(by_group[group], key=lambda f: f["kickoff_utc"])
+            if not fixtures:
+                st.caption("No fixtures for this group yet.")
+                continue
+            cols = st.columns(2)
+            for i, fx in enumerate(fixtures):
                 _match_tile(cols[i % 2], fx)
-        st.divider()
 
 
 def _render_knockout_stage(token: str, stage: str) -> None:
@@ -102,7 +97,7 @@ def _render_knockout_stage(token: str, stage: str) -> None:
 
 
 def render() -> None:
-    st.header("Fixtures & Results")
+    st.header("📅 Fixtures & Results")
     token = st.session_state["session_token"]
 
     windows = api_client.get_windows(token)
