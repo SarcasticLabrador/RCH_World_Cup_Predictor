@@ -1,12 +1,9 @@
-"""Security helpers: magic-link tokens and signed session tokens.
-
-Magic-link tokens are random, single-use, and stored only as SHA-256 hashes
-(the raw token lives only in the emailed URL). Session tokens are stateless,
-signed with SECRET_KEY via itsdangerous, and carry an expiry.
-"""
+"""Security helpers: password hashing, magic-link tokens and signed session tokens."""
 from __future__ import annotations
 
 import hashlib
+import hmac
+import os
 import secrets
 
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -14,6 +11,25 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from backend.config import get_settings
 
 _SESSION_SALT = "wcp-session-v1"
+_ITERATIONS = 260_000
+
+
+# --- Password hashing (stdlib pbkdf2 — no extra dependency) -----------------
+
+def hash_password(plain: str) -> str:
+    salt = os.urandom(32)
+    key = hashlib.pbkdf2_hmac("sha256", plain.encode(), salt, _ITERATIONS)
+    return salt.hex() + ":" + key.hex()
+
+
+def verify_password(plain: str, stored: str) -> bool:
+    try:
+        salt_hex, key_hex = stored.split(":")
+    except ValueError:
+        return False
+    salt = bytes.fromhex(salt_hex)
+    key = hashlib.pbkdf2_hmac("sha256", plain.encode(), salt, _ITERATIONS)
+    return hmac.compare_digest(key.hex(), key_hex)
 
 
 def generate_magic_token() -> tuple[str, str]:
