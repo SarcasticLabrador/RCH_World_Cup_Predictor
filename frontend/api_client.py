@@ -170,6 +170,30 @@ def admin_snapshot(session_token: str) -> dict:
     return r.json()
 
 
+def admin_reset_password(session_token: str, email: str, new_password: str) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/admin/reset-password",
+        json={"email": email, "new_password": new_password},
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def admin_create_user(
+    session_token: str, email: str, password: str, display_name: str, is_admin: bool = False
+) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/admin/create-user",
+        json={"email": email, "password": password, "display_name": display_name, "is_admin": is_admin},
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
 def admin_team_stats(session_token: str) -> list[dict]:
     r = httpx.get(
         f"{BACKEND_URL}/admin/team-stats",
