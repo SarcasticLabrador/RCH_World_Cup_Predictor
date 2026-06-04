@@ -102,7 +102,7 @@ def _render_knockout_stage(token: str, stage: str) -> None:
 
 
 def render() -> None:
-    st.header("📅 Fixtures & Results")
+    st.header("Fixtures & Results")
     token = st.session_state["session_token"]
 
     windows = api_client.get_windows(token)
