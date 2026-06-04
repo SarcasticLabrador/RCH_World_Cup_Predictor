@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from backend.api.routes import admin, ai, auth, health, leaderboard, predictions, specials, tasks
+from backend.api.routes import admin, ai, auth, bracket, health, leaderboard, predictions, specials, tasks
 from backend.config import get_settings
 from backend.db.base import Base, engine
 from backend.scheduler import shutdown_scheduler, start_scheduler
@@ -35,6 +35,7 @@ app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(predictions.router)
+app.include_router(bracket.router)
 app.include_router(admin.router)
 app.include_router(specials.router)
 app.include_router(leaderboard.router)
