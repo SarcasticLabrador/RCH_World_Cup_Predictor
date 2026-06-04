@@ -15,6 +15,53 @@ _CET = ZoneInfo("Europe/Berlin")
 
 ROUND_ORDER = ["group", "r32", "r16", "qf", "sf", "final"]
 
+
+def _render_actual_standings(fixtures: list[dict], group: str) -> None:
+    """Show a standings table from finished matches."""
+    group_fx = [f for f in fixtures
+                if GROUP_MAP.get(f.get("home_team") or "") == group
+                or GROUP_MAP.get(f.get("away_team") or "") == group]
+
+    played = [f for f in group_fx if f.get("home_score") is not None]
+    if not played:
+        return
+
+    teams: dict[str, dict] = {}
+    for fx in group_fx:
+        for name in (fx.get("home_team"), fx.get("away_team")):
+            if name and name not in teams:
+                teams[name] = {"P": 0, "W": 0, "D": 0, "L": 0, "GF": 0, "GA": 0, "Pts": 0}
+
+    for fx in played:
+        h, a = fx["home_team"], fx["away_team"]
+        hs, as_ = fx["home_score"], fx["away_score"]
+        if not h or not a:
+            continue
+        teams[h]["P"] += 1; teams[a]["P"] += 1
+        teams[h]["GF"] += hs; teams[h]["GA"] += as_
+        teams[a]["GF"] += as_; teams[a]["GA"] += hs
+        if hs > as_:
+            teams[h]["W"] += 1; teams[h]["Pts"] += 3; teams[a]["L"] += 1
+        elif as_ > hs:
+            teams[a]["W"] += 1; teams[a]["Pts"] += 3; teams[h]["L"] += 1
+        else:
+            teams[h]["D"] += 1; teams[h]["Pts"] += 1
+            teams[a]["D"] += 1; teams[a]["Pts"] += 1
+
+    rows = sorted(
+        teams.items(),
+        key=lambda kv: (-kv[1]["Pts"], -(kv[1]["GF"] - kv[1]["GA"]), -kv[1]["GF"], kv[0].lower()),
+    )
+    st.caption("Group standings")
+    fi = get_flag_img
+    table = [
+        {"": f"{fi(n)}{n}" if fi(n) else n,
+         "P": r["P"], "W": r["W"], "D": r["D"], "L": r["L"],
+         "GF": r["GF"], "GA": r["GA"], "GD": r["GF"] - r["GA"], "Pts": r["Pts"]}
+        for n, r in rows
+    ]
+    st.dataframe(table, use_container_width=True, hide_index=True)
+
 # Known knockout bracket dates/venues/matchups (all times UTC).
 # R32 matchups are fixed by FIFA; R16+ show TBD until R32 resolves.
 _KO_PLACEHOLDERS: dict[str, list[dict]] = {
@@ -131,6 +178,8 @@ def _render_group_stage(token: str) -> None:
                     fx.get("home_score"),
                     fx.get("away_score"),
                 )
+            # Actual standings from finished matches
+            _render_actual_standings(all_fixtures, group)
 
 
 def _render_knockout_stage(token: str, stage: str) -> None:
