@@ -1,9 +1,4 @@
-"""SQLAlchemy ORM models for the World Cup Predictor.
-
-Mirrors the agreed data model:
-  users, magic_links, tournaments, teams, matches, prediction_windows,
-  predictions, special_predictions, leaderboard_snapshots.
-"""
+"""SQLAlchemy ORM models for the World Cup Predictor."""
 from __future__ import annotations
 
 import uuid
@@ -22,20 +17,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.db.base import Base
 from backend.db.types import GUID, new_uuid
-from backend.enums import (
-    MatchStatus,
-    SpecialCategory,
-    Stage,
-    TournamentStatus,
-)
+from backend.enums import MatchStatus, SpecialCategory, Stage, TournamentStatus
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-# Shorthand for native-enum-free storage (stores the value as a string, which
-# is portable and keeps migrations painless).
 def _enum(py_enum):
     return SAEnum(py_enum, native_enum=False, validate_strings=True, length=32)
 
@@ -47,13 +35,16 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     display_name: Mapped[str | None] = mapped_column(String(80))
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    password_hash: Mapped[str | None] = mapped_column(String(256))
+    password_hash: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     magic_links: Mapped[list["MagicLink"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
     predictions: Mapped[list["Prediction"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    bracket_predictions: Mapped[list["BracketPrediction"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
     special_predictions: Mapped[list["SpecialPrediction"]] = relationship(
@@ -91,6 +82,9 @@ class Tournament(Base):
     matches: Mapped[list["Match"]] = relationship(
         back_populates="tournament", cascade="all, delete-orphan"
     )
+    bracket_slots: Mapped[list["BracketSlot"]] = relationship(
+        back_populates="tournament", cascade="all, delete-orphan"
+    )
 
 
 class Team(Base):
@@ -101,7 +95,7 @@ class Team(Base):
         GUID, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(80), nullable=False)
-    group: Mapped[str | None] = mapped_column(String(2))  # A..L (12 groups in 2026)
+    group: Mapped[str | None] = mapped_column(String(2))
     flag_url: Mapped[str | None] = mapped_column(String(255))
     external_id: Mapped[str | None] = mapped_column(String(40), index=True)
 
@@ -111,13 +105,14 @@ class Team(Base):
 
 
 class Match(Base):
+    """Group stage matches only. Knockout matches use BracketSlot."""
+
     __tablename__ = "matches"
 
     id: Mapped[uuid.UUID] = mapped_column(GUID, primary_key=True, default=new_uuid)
     tournament_id: Mapped[uuid.UUID] = mapped_column(
         GUID, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    # Nullable: knockout fixtures exist before the qualifying teams are known.
     home_team_id: Mapped[uuid.UUID | None] = mapped_column(
         GUID, ForeignKey("teams.id", ondelete="SET NULL")
     )
@@ -130,6 +125,10 @@ class Match(Base):
 
     home_score: Mapped[int | None] = mapped_column(Integer)
     away_score: Mapped[int | None] = mapped_column(Integer)
+    # Penalty scores — populated only when match decided by shootout.
+    penalty_home_score: Mapped[int | None] = mapped_column(Integer)
+    penalty_away_score: Mapped[int | None] = mapped_column(Integer)
+
     status: Mapped[MatchStatus] = mapped_column(
         _enum(MatchStatus), default=MatchStatus.SCHEDULED, nullable=False
     )
@@ -143,9 +142,60 @@ class Match(Base):
     )
 
 
-class PredictionWindow(Base):
-    """One window per stage. closes_at == kickoff of the first match in the stage."""
+class BracketSlot(Base):
+    """An abstract position in the knockout bracket (R32 through Final).
 
+    Seeded once at tournament setup from wc2026_bracket_slots.py.
+    home_team_id / away_team_id are set when qualifying teams are known.
+    Scores are set when the match is played.
+    """
+
+    __tablename__ = "bracket_slots"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID, primary_key=True, default=new_uuid)
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        GUID, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    match_number: Mapped[int] = mapped_column(Integer, nullable=False)  # FIFA match # (73-104)
+    stage: Mapped[Stage] = mapped_column(_enum(Stage), nullable=False, index=True)
+
+    # Human-readable slot descriptions before teams are known.
+    home_descriptor: Mapped[str] = mapped_column(String(60), nullable=False)
+    away_descriptor: Mapped[str] = mapped_column(String(60), nullable=False)
+
+    kickoff_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    venue: Mapped[str | None] = mapped_column(String(120))
+
+    # Set when qualifying teams are known (admin action post-group-stage).
+    home_team_id: Mapped[uuid.UUID | None] = mapped_column(
+        GUID, ForeignKey("teams.id", ondelete="SET NULL")
+    )
+    away_team_id: Mapped[uuid.UUID | None] = mapped_column(
+        GUID, ForeignKey("teams.id", ondelete="SET NULL")
+    )
+
+    # Actual results. penalty_* only populated when match decided by shootout.
+    home_score: Mapped[int | None] = mapped_column(Integer)
+    away_score: Mapped[int | None] = mapped_column(Integer)
+    penalty_home_score: Mapped[int | None] = mapped_column(Integer)
+    penalty_away_score: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[MatchStatus] = mapped_column(
+        _enum(MatchStatus), default=MatchStatus.SCHEDULED, nullable=False
+    )
+
+    tournament: Mapped["Tournament"] = relationship(back_populates="bracket_slots")
+    home_team: Mapped["Team | None"] = relationship(foreign_keys=[home_team_id])
+    away_team: Mapped["Team | None"] = relationship(foreign_keys=[away_team_id])
+    predictions: Mapped[list["BracketPrediction"]] = relationship(
+        back_populates="slot", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("tournament_id", "match_number", name="uq_bracket_slot_per_tournament"),
+    )
+
+
+class PredictionWindow(Base):
     __tablename__ = "prediction_windows"
 
     id: Mapped[uuid.UUID] = mapped_column(GUID, primary_key=True, default=new_uuid)
@@ -163,7 +213,7 @@ class PredictionWindow(Base):
 
 
 class Prediction(Base):
-    """A user's predicted scoreline for a single match."""
+    """A user's predicted scoreline for a single GROUP STAGE match."""
 
     __tablename__ = "predictions"
 
@@ -180,7 +230,6 @@ class Prediction(Base):
     last_edited_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
-    # Null until the match is scored.
     points_awarded: Mapped[int | None] = mapped_column(Integer)
 
     user: Mapped["User"] = relationship(back_populates="predictions")
@@ -191,8 +240,41 @@ class Prediction(Base):
     )
 
 
+class BracketPrediction(Base):
+    """A user's predicted scoreline for a knockout bracket slot (R32-Final).
+
+    Scoring is position-based: predicted_home > predicted_away means the user
+    expects the home-position team to advance. Points are awarded when the slot
+    has a confirmed result.
+    """
+
+    __tablename__ = "bracket_predictions"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID, primary_key=True, default=new_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        GUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    slot_id: Mapped[uuid.UUID] = mapped_column(
+        GUID, ForeignKey("bracket_slots.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    predicted_home_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    predicted_away_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_edited_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+    points_awarded: Mapped[int | None] = mapped_column(Integer)
+
+    user: Mapped["User"] = relationship(back_populates="bracket_predictions")
+    slot: Mapped["BracketSlot"] = relationship(back_populates="predictions")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "slot_id", name="uq_bracket_pred_per_user_slot"),
+    )
+
+
 class SpecialPrediction(Base):
-    """Pre-tournament predictions: awards, champion, runner-up, team stats."""
+    """Pre-tournament individual award and tournament stat predictions."""
 
     __tablename__ = "special_predictions"
 
@@ -216,7 +298,7 @@ class SpecialPrediction(Base):
 
 
 class LeaderboardSnapshot(Base):
-    """Materialised leaderboard rows. stage=None means the overall board."""
+    """Materialised leaderboard rows with split match / award points."""
 
     __tablename__ = "leaderboard_snapshots"
 
@@ -225,18 +307,15 @@ class LeaderboardSnapshot(Base):
         GUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     stage: Mapped[Stage | None] = mapped_column(_enum(Stage))  # None => overall
+    match_points: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    award_points: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_points: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     rank: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     snapshot_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
 class SpecialResult(Base):
-    """Actual outcomes for special-prediction categories.
-
-    Player awards (Golden Ball/Boot/Glove, Best Young Player) are entered here
-    manually by the admin. Champion / runner-up / team-stat categories are
-    auto-derived from match data, but a row here overrides the derived value.
-    """
+    """Actual outcomes for special-prediction categories (admin-entered)."""
 
     __tablename__ = "special_results"
 
