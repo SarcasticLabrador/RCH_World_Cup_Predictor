@@ -350,3 +350,17 @@ def submit_bracket_predictions(session_token: str, items: list[dict]) -> dict:
     )
     r.raise_for_status()
     return r.json()
+
+
+
+def get_odds(session_token: str) -> dict | None:
+    try:
+        r = httpx.get(
+            f"{BACKEND_URL}/odds",
+            headers=_auth_headers(session_token),
+            timeout=15.0,   # ELO scrape can take a moment on first call
+        )
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return None
