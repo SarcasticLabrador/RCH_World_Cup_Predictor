@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     api_football_season: int = 2026
     tournament_name: str = "FIFA World Cup 2026"
 
+    # --- Odds & ELO (Phase 9) ---
+    # Free tier: 500 requests/month. Leave empty to disable market odds display.
+    odds_api_key: str = ""
+    odds_api_base_url: str = "https://api.the-odds-api.com/v4"
+
     # --- Gemini AI (Phase 7) ---
     gemini_api_key: str = ""
     # Default to a known-stable model; bump via env as newer models ship.
