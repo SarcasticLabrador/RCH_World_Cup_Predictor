@@ -51,6 +51,18 @@ def submit_specials(
     return SubmitSpecialsOut(saved=saved)
 
 
+@router.post("/reset", response_model=SubmitSpecialsOut)
+def reset_specials(
+    current: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SubmitSpecialsOut:
+    """Clear all of a user's individual award picks."""
+    tournament = _require_tournament(db)
+    deleted = specials_service.reset_specials(db, current, tournament)
+    db.commit()
+    return SubmitSpecialsOut(saved=deleted)
+
+
 @router.get("/teams", response_model=list[TeamOut])
 def list_teams(
     _current: User = Depends(get_current_user), db: Session = Depends(get_db)
