@@ -104,6 +104,27 @@ def submit_predictions(session_token: str, stage: str, items: list[dict]) -> dic
     return r.json()
 
 
+def reset_predictions(session_token: str, stage: str, group: str | None = None) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/predictions/reset",
+        json={"stage": stage, "group": group},
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def reset_specials(session_token: str) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/specials/reset",
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
 # --- Admin (Phase 4) ---
 
 def admin_set_match_result(
