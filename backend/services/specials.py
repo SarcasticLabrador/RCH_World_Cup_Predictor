@@ -7,6 +7,7 @@ the group window's state as the specials window.
 from __future__ import annotations
 
 from fastapi import HTTPException, status as http_status
+from fastapi import HTTPException, status as http_status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -97,3 +98,19 @@ def submit_specials(
 
     db.flush()
     return saved
+
+
+def reset_specials(db: Session, user: User, tournament: Tournament) -> int:
+    """Delete all of a user's special predictions. Only allowed while open."""
+    if specials_state(db, tournament) != "open":
+        raise HTTPException(
+            http_status.HTTP_409_CONFLICT,
+            "Individual picks are locked (the tournament has started).",
+        )
+    deleted = (
+        db.query(SpecialPrediction)
+        .filter(SpecialPrediction.user_id == user.id)
+        .delete(synchronize_session=False)
+    )
+    db.flush()
+    return deleted
