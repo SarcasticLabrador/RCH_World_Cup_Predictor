@@ -1,57 +1,35 @@
-"""Auth endpoints: request login link, verify, fetch profile, update profile."""
+"""Auth endpoints: register, login, profile."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.api.deps import get_current_user
-from backend.config import get_settings
 from backend.db.base import get_db
 from backend.db.models import User
-from backend.schemas import (
-    GenericMessageOut,
-    RequestLinkIn,
-    UpdateProfileIn,
-    UserOut,
-    VerifyOut,
-)
+from backend.schemas import LoginIn, RegisterIn, UpdateProfileIn, UserOut, VerifyOut
 from backend.security import make_session_token
 from backend.services import auth as auth_service
-from backend.services.email import get_email_sender
-from backend.services.email_templates import login_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# Deliberately generic so we never reveal who is/isn't whitelisted.
-_GENERIC_MSG = "If your email is eligible, a sign-in link has been sent."
 
-
-@router.post("/request-link", response_model=GenericMessageOut)
-def request_link(body: RequestLinkIn, db: Session = Depends(get_db)) -> GenericMessageOut:
-    settings = get_settings()
-    email = str(body.email)
-
-    if auth_service.is_whitelisted(email):
-        user = auth_service.get_or_create_user(db, email)
-        raw = auth_service.create_magic_link(db, user)
-        db.commit()
-
-        url = auth_service.build_magic_url(raw)
-        subject, html, text = login_email(url, settings.magic_link_ttl_hours)
-        get_email_sender(settings).send(email, subject, html, text)
-
-    return GenericMessageOut(message=_GENERIC_MSG)
-
-
-@router.get("/verify", response_model=VerifyOut)
-def verify(token: str, db: Session = Depends(get_db)) -> VerifyOut:
-    from fastapi import HTTPException, status
-
-    user = auth_service.consume_magic_link(db, token)
-    if user is None:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid or expired link")
+@router.post("/register", response_model=VerifyOut, status_code=201)
+def register(body: RegisterIn, db: Session = Depends(get_db)) -> VerifyOut:
+    if not auth_service.is_whitelisted(str(body.email)):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Email address not on the invite list.")
+    if auth_service.get_user_by_email(db, str(body.email)):
+        raise HTTPException(status.HTTP_409_CONFLICT, "An account with that email already exists.")
+    user = auth_service.register_user(db, str(body.email), body.password, body.display_name)
     db.commit()
+    return VerifyOut(session_token=make_session_token(user.id), user=UserOut.model_validate(user))
 
+
+@router.post("/login", response_model=VerifyOut)
+def login(body: LoginIn, db: Session = Depends(get_db)) -> VerifyOut:
+    user = auth_service.authenticate_user(db, str(body.email), body.password)
+    if user is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Incorrect email or password.")
     return VerifyOut(session_token=make_session_token(user.id), user=UserOut.model_validate(user))
 
 
