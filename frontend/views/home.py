@@ -29,10 +29,10 @@ def render() -> None:
         nxt = min(open_closes)
         delta = nxt - now
         days, hours = delta.days, delta.seconds // 3600
-        st.metric("Next prediction deadline", to_cet(min(open_closes).isoformat()),
+        st.metric("Time to submit forecasts:", to_cet(min(open_closes).isoformat()),
                   delta=f"in {days}d {hours}h")
     else:
-        st.caption("No prediction window is open right now.")
+        st.caption("Prediction window is closed.")
 
     st.subheader("Stages")
     for w in windows:
