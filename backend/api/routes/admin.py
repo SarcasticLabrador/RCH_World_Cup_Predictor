@@ -38,7 +38,7 @@ def set_match_result(
     _admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ) -> ScoreSummaryOut:
-    """Manually set/override a match score, then re-score everything."""
+    """Manually set/override a group stage match score, then re-score everything."""
     tournament = _tournament(db)
     match = db.get(Match, body.match_id)
     if match is None or match.tournament_id != tournament.id:
@@ -47,10 +47,12 @@ def set_match_result(
     if body.finished:
         match.home_score = body.home_score
         match.away_score = body.away_score
+        match.penalty_home_score = body.penalty_home_score
+        match.penalty_away_score = body.penalty_away_score
         match.status = MatchStatus.FINISHED
     else:
-        match.home_score = None
-        match.away_score = None
+        match.home_score = match.away_score = None
+        match.penalty_home_score = match.penalty_away_score = None
         match.status = MatchStatus.SCHEDULED
 
     summary = scoring.score_tournament(db, tournament)
