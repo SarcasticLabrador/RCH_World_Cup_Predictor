@@ -67,10 +67,9 @@ def _render_standings_table(fixtures: list[dict], group: str) -> None:
         teams.items(),
         key=lambda kv: (-kv[1]["Pts"], -(kv[1]["GF"] - kv[1]["GA"]), -kv[1]["GF"], kv[0].lower()),
     )
-    fi = get_flag_img
     table = [
         {
-            "": f"{fi(n)}{n}" if fi(n) else n,
+            "": n,
             "P": r["P"], "W": r["W"], "D": r["D"], "L": r["L"],
             "GF": r["GF"], "GA": r["GA"], "GD": r["GF"] - r["GA"], "Pts": r["Pts"],
         }
