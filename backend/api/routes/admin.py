@@ -12,10 +12,13 @@ from backend.db.base import get_db
 from backend.db.models import Match, SpecialResult, Tournament, User
 from backend.enums import MatchStatus, SpecialCategory
 from backend.schemas import (
+    CreateUserIn,
     MatchResultIn,
+    ResetPasswordIn,
     ScoreSummaryOut,
     SpecialResultIn,
     TeamStatOut,
+    UserOut,
 )
 from backend.services import scoring, seeding
 
@@ -168,3 +171,41 @@ def seed_manual(
     stats = seeding.seed_world_cup(db, get_2026_fixtures(), get_2026_groups())
     db.commit()
     return stats
+
+
+@router.post("/reset-password", response_model=UserOut)
+def reset_password(
+    body: ResetPasswordIn,
+    _admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> UserOut:
+    """Reset a user's password. Admin only."""
+    from backend.security import hash_password
+    from backend.services.auth import get_user_by_email
+
+    user = get_user_by_email(db, str(body.email))
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No account with that email.")
+    user.password_hash = hash_password(body.new_password)
+    db.commit()
+    db.refresh(user)
+    return UserOut.model_validate(user)
+
+
+@router.post("/create-user", response_model=UserOut, status_code=201)
+def create_user(
+    body: CreateUserIn,
+    _admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> UserOut:
+    """Create an account on behalf of a colleague. Bypasses the whitelist."""
+    from backend.services.auth import get_user_by_email, register_user
+
+    if get_user_by_email(db, str(body.email)):
+        raise HTTPException(status.HTTP_409_CONFLICT, "An account with that email already exists.")
+    user = register_user(db, str(body.email), body.password, body.display_name)
+    if body.is_admin:
+        user.is_admin = True
+    db.commit()
+    db.refresh(user)
+    return UserOut.model_validate(user)
