@@ -128,11 +128,54 @@ def reset_specials(session_token: str) -> dict:
 # --- Admin (Phase 4) ---
 
 def admin_set_match_result(
-    session_token: str, match_id: str, home: int, away: int, finished: bool = True
+    session_token: str,
+    match_id: str,
+    home: int,
+    away: int,
+    finished: bool = True,
+    penalty_home: int | None = None,
+    penalty_away: int | None = None,
 ) -> dict:
+    payload: dict = {
+        "match_id": match_id,
+        "home_score": home,
+        "away_score": away,
+        "finished": finished,
+    }
+    if penalty_home is not None:
+        payload["penalty_home_score"] = penalty_home
+        payload["penalty_away_score"] = penalty_away
     r = httpx.post(
         f"{BACKEND_URL}/admin/match-result",
-        json={"match_id": match_id, "home_score": home, "away_score": away, "finished": finished},
+        json=payload,
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def admin_set_bracket_result(
+    session_token: str,
+    match_number: int,
+    home: int,
+    away: int,
+    finished: bool = True,
+    penalty_home: int | None = None,
+    penalty_away: int | None = None,
+) -> dict:
+    payload: dict = {
+        "match_number": match_number,
+        "home_score": home,
+        "away_score": away,
+        "finished": finished,
+    }
+    if penalty_home is not None:
+        payload["penalty_home_score"] = penalty_home
+        payload["penalty_away_score"] = penalty_away
+    r = httpx.post(
+        f"{BACKEND_URL}/bracket/admin/result",
+        json=payload,
         headers=_auth_headers(session_token),
         timeout=_TIMEOUT,
     )
@@ -260,10 +303,9 @@ def get_teams(session_token: str) -> list[dict]:
     return r.json()
 
 
-def get_leaderboard(session_token: str, scope: str = "overall") -> dict | None:
+def get_leaderboard(session_token: str) -> dict | None:
     r = httpx.get(
         f"{BACKEND_URL}/leaderboard",
-        params={"scope": scope},
         headers=_auth_headers(session_token),
         timeout=_TIMEOUT,
     )
@@ -282,5 +324,29 @@ def get_match_centre(session_token: str, news: bool = False, refresh: bool = Fal
     )
     if r.status_code == 404:
         return None
+    r.raise_for_status()
+    return r.json()
+
+
+def get_bracket_slots(session_token: str) -> dict | None:
+    try:
+        r = httpx.get(
+            f"{BACKEND_URL}/bracket/slots",
+            headers=_auth_headers(session_token),
+            timeout=_TIMEOUT,
+        )
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return None
+
+
+def submit_bracket_predictions(session_token: str, items: list[dict]) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/bracket/predictions",
+        json={"predictions": items},
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
     r.raise_for_status()
     return r.json()
