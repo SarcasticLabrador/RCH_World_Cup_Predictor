@@ -1,8 +1,11 @@
-"""Leaderboard computation: overall, per-stage, and specials.
+"""Leaderboard with split match / award / total points.
 
-Points come from already-computed `points_awarded` (None counts as 0). Ties
-share the same rank (standard competition ranking: 1, 2, 2, 4 ...), per the
-'display as tied' decision. All registered users appear, even with 0 points.
+Three views:
+  match  — points from group stage + all bracket slots
+  awards — points from special predictions
+  total  — match + awards combined
+
+Each view has its own independent ranking.
 """
 from __future__ import annotations
 
@@ -10,6 +13,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.db.models import (
+    BracketPrediction,
+    BracketSlot,
     LeaderboardSnapshot,
     Match,
     Prediction,
@@ -17,95 +22,110 @@ from backend.db.models import (
     Tournament,
     User,
 )
-from backend.enums import Stage
-
-STAGE_SCOPES = {s.value for s in Stage}
-VALID_SCOPES = {"overall", "specials"} | STAGE_SCOPES
 
 
 def _display(user: User) -> str:
     return user.display_name or user.email.split("@")[0]
 
 
-def _assign_ranks(rows: list[dict]) -> list[dict]:
-    """rows must be pre-sorted by points desc. Equal points share a rank."""
-    last_points = None
+def _assign_ranks(rows: list[dict], key: str) -> list[dict]:
+    """Sort rows by key descending and assign standard competition ranks."""
+    rows.sort(key=lambda r: (-r[key], r["display_name"].lower()))
+    last = None
     rank = 0
     for i, row in enumerate(rows, start=1):
-        if row["points"] != last_points:
+        if row[key] != last:
             rank = i
-            last_points = row["points"]
-        row["rank"] = rank
+            last = row[key]
+        row[f"{key}_rank"] = rank
     return rows
 
 
-def latest_snapshot_ranks(db: Session, scope: str) -> dict:
-    """Map user_id -> rank from the most recent snapshot for a scope.
-
-    'specials' has no stored snapshot (no enum value), so returns empty.
-    """
-    if scope == "specials":
-        return {}
-    stage_val = None if scope == "overall" else Stage(scope)
-
-    cond = (
-        LeaderboardSnapshot.stage.is_(None)
-        if stage_val is None
-        else LeaderboardSnapshot.stage == stage_val
-    )
-    latest = db.scalar(select(func.max(LeaderboardSnapshot.snapshot_at)).where(cond))
-    if latest is None:
-        return {}
-    rows = db.execute(
-        select(LeaderboardSnapshot.user_id, LeaderboardSnapshot.rank).where(
-            cond, LeaderboardSnapshot.snapshot_at == latest
-        )
-    ).all()
-    return {uid: rank for uid, rank in rows}
-
-
-def compute(
-    db: Session, tournament: Tournament, scope: str, with_previous: bool = False
-) -> list[dict]:
-    if scope not in VALID_SCOPES:
-        raise ValueError(f"Unknown scope '{scope}'")
-
+def compute(db: Session, tournament: Tournament, with_previous: bool = False) -> list[dict]:
+    """Compute the combined leaderboard with match_pts, award_pts, total_pts."""
     users = db.scalars(select(User)).all()
-    points: dict = {u.id: 0 for u in users}
+    match_pts: dict = {u.id: 0 for u in users}
+    award_pts: dict = {u.id: 0 for u in users}
 
-    include_matches = scope == "overall" or scope in STAGE_SCOPES
-    include_specials = scope in ("overall", "specials")
+    # Group stage points (Prediction table).
+    for user_id, pts in db.execute(
+        select(Prediction.user_id, Prediction.points_awarded)
+        .join(Match, Prediction.match_id == Match.id)
+        .where(Match.tournament_id == tournament.id)
+    ).all():
+        if pts and user_id in match_pts:
+            match_pts[user_id] += pts
 
-    if include_matches:
-        rows = db.execute(
-            select(Prediction.user_id, Prediction.points_awarded, Match.stage)
-            .join(Match, Prediction.match_id == Match.id)
-            .where(Match.tournament_id == tournament.id)
-        ).all()
-        for user_id, pts, stage in rows:
-            if pts is None or user_id not in points:
-                continue
-            if scope == "overall" or stage.value == scope:
-                points[user_id] += pts
+    # Bracket points (BracketPrediction table).
+    for user_id, pts in db.execute(
+        select(BracketPrediction.user_id, BracketPrediction.points_awarded)
+        .join(BracketSlot, BracketPrediction.slot_id == BracketSlot.id)
+        .where(BracketSlot.tournament_id == tournament.id)
+    ).all():
+        if pts and user_id in match_pts:
+            match_pts[user_id] += pts
 
-    if include_specials:
-        srows = db.execute(
-            select(SpecialPrediction.user_id, SpecialPrediction.points_awarded)
-        ).all()
-        for user_id, pts in srows:
-            if pts and user_id in points:
-                points[user_id] += pts
+    # Award points (SpecialPrediction table).
+    for user_id, pts in db.execute(
+        select(SpecialPrediction.user_id, SpecialPrediction.points_awarded)
+    ).all():
+        if pts and user_id in award_pts:
+            award_pts[user_id] += pts
 
-    result = [
-        {"user_id": u.id, "display_name": _display(u), "points": points[u.id]}
+    rows = [
+        {
+            "user_id": u.id,
+            "display_name": _display(u),
+            "match_pts": match_pts[u.id],
+            "award_pts": award_pts[u.id],
+            "total_pts": match_pts[u.id] + award_pts[u.id],
+        }
         for u in users
     ]
-    # Sort by points desc, then name for a stable, readable order.
-    result.sort(key=lambda r: (-r["points"], r["display_name"].lower()))
-    _assign_ranks(result)
+
+    _assign_ranks(rows, "match_pts")
+    _assign_ranks(rows, "award_pts")
+    _assign_ranks(rows, "total_pts")
 
     if with_previous:
-        prev = latest_snapshot_ranks(db, scope)
-        for r in result:
+        # Load latest overall snapshot for movement arrows.
+        latest = db.scalar(
+            select(func.max(LeaderboardSnapshot.snapshot_at)).where(
+                LeaderboardSnapshot.stage.is_(None)
+            )
+        )
+        prev: dict = {}
+        if latest:
+            for uid, rank in db.execute(
+                select(LeaderboardSnapshot.user_id, LeaderboardSnapshot.rank).where(
+                    LeaderboardSnapshot.stage.is_(None),
+                    LeaderboardSnapshot.snapshot_at == latest,
+                )
+            ).all():
+                prev[uid] = rank
+        for r in rows:
             r["previous_rank"] = prev.get(r["user_id"])
-    return result
+
+    return rows
+
+
+def snapshot(db: Session, tournament: Tournament) -> int:
+    """Persist the current leaderboard as a snapshot row per user."""
+    rows = compute(db, tournament)
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    written = 0
+    for r in rows:
+        snap = LeaderboardSnapshot(
+            user_id=r["user_id"],
+            stage=None,
+            match_points=r["match_pts"],
+            award_points=r["award_pts"],
+            total_points=r["total_pts"],
+            rank=r["total_pts_rank"],
+            snapshot_at=now,
+        )
+        db.add(snap)
+        written += 1
+    db.flush()
+    return written
