@@ -26,11 +26,16 @@ class MatchStatus(str, enum.Enum):
 
 
 class SpecialCategory(str, enum.Enum):
+    # Player awards (admin-entered after tournament)
     GOLDEN_BALL = "golden_ball"
     GOLDEN_BOOT = "golden_boot"
     GOLDEN_GLOVE = "golden_glove"
     BEST_YOUNG_PLAYER = "best_young_player"
-    MOST_GOALS_PER_GAME = "most_goals_per_game"
-    FEWEST_CONCEDED_PER_GAME = "fewest_conceded_per_game"
-    CHAMPION = "champion"
-    RUNNER_UP = "runner_up"
+    # Team award (exact match)
+    TEAM_MOST_GOALS = "team_most_goals"
+    # Numeric tournament stats (closest wins)
+    TOTAL_GOALS = "total_goals"
+    YELLOW_CARDS = "yellow_cards"
+    RED_CARDS = "red_cards"
+    FASTEST_GOAL = "fastest_goal"      # exact minute
+    BIGGEST_MARGIN = "biggest_margin"  # goal difference
