@@ -89,11 +89,20 @@ def get_flag(team_name: str | None) -> str:
     return FLAGS.get(team_name, "🏳")
 
 
+# Custom SVG overrides — take priority over FLAG_URLS.
+# Point these at raw.githubusercontent.com once the files are committed.
+CUSTOM_FLAG_URLS: dict[str, str] = {
+     "France":      "https://raw.githubusercontent.com/YOUR_ORG/YOUR_REPO/main/custom_flags/france.svg",
+     "Netherlands": "https://raw.githubusercontent.com/YOUR_ORG/YOUR_REPO/main/custom_flags/netherlands.svg",
+     "United States": "https://raw.githubusercontent.com/YOUR_ORG/YOUR_REPO/main/custom_flags/usa.svg",
+}
+
+
 def get_flag_img(team_name: str | None, height: int = 18) -> str:
     """Return an HTML <img> tag for the team's SVG flag, or empty string if unknown."""
     if not team_name:
         return ""
-    url = FLAG_URLS.get(team_name)
+    url = CUSTOM_FLAG_URLS.get(team_name) or FLAG_URLS.get(team_name)
     if not url:
         return ""
     return (
