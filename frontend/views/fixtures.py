@@ -1,4 +1,4 @@
-"""Fixtures & Results view: all rounds with SVG flags and knockout placeholders."""
+"""Fixtures & Results view: all rounds with SVG flags, standings, and implied odds."""
 from __future__ import annotations
 
 from collections import defaultdict
@@ -12,16 +12,15 @@ from frontend.flags import GROUP_MAP, get_flag_img
 from frontend.labels import STAGE_LABELS, to_cet
 
 _CET = ZoneInfo("Europe/Berlin")
-
 ROUND_ORDER = ["group", "r32", "r16", "qf", "sf", "final"]
 
 
+# ── Standings ────────────────────────────────────────────────────────────────
+
 def _render_actual_standings(fixtures: list[dict], group: str) -> None:
-    """Show a standings table from finished matches."""
     group_fx = [f for f in fixtures
                 if GROUP_MAP.get(f.get("home_team") or "") == group
                 or GROUP_MAP.get(f.get("away_team") or "") == group]
-
     played = [f for f in group_fx if f.get("home_score") is not None]
     if not played:
         return
@@ -33,8 +32,7 @@ def _render_actual_standings(fixtures: list[dict], group: str) -> None:
                 teams[name] = {"P": 0, "W": 0, "D": 0, "L": 0, "GF": 0, "GA": 0, "Pts": 0}
 
     for fx in played:
-        h, a = fx["home_team"], fx["away_team"]
-        hs, as_ = fx["home_score"], fx["away_score"]
+        h, a, hs, as_ = fx["home_team"], fx["away_team"], fx["home_score"], fx["away_score"]
         if not h or not a:
             continue
         teams[h]["P"] += 1; teams[a]["P"] += 1
@@ -62,8 +60,9 @@ def _render_actual_standings(fixtures: list[dict], group: str) -> None:
     ]
     st.dataframe(table, use_container_width=True, hide_index=True)
 
-# Known knockout bracket dates/venues/matchups (all times UTC).
-# R32 matchups are fixed by FIFA; R16+ show TBD until R32 resolves.
+
+# ── Knockout placeholders ─────────────────────────────────────────────────────
+
 _KO_PLACEHOLDERS: dict[str, list[dict]] = {
     "r32": [
         {"home": "Runner-up A",  "away": "Runner-up B",  "kickoff": "2026-06-28T19:00:00+00:00", "venue": "SoFi Stadium, Inglewood"},
@@ -109,19 +108,35 @@ _KO_PLACEHOLDERS: dict[str, list[dict]] = {
 }
 
 
-def _cet_date_label(iso: str) -> str:
-    dt = datetime.fromisoformat(iso).astimezone(_CET)
-    return dt.strftime("%A, %d %B")
+# ── Probability display helpers ───────────────────────────────────────────────
+
+def _pct(p: float) -> str:
+    return f"{round(p * 100)}%"
 
 
-def _status_badge(fx: dict) -> str:
-    if fx.get("home_score") is not None:
-        return "🟢 Final"
-    return "⏳ Upcoming"
+def _prob_row(label: str, home: str, away: str, probs: dict) -> str:
+    """Return a single odds row as markdown."""
+    return (
+        f"<span style='color:var(--color-text-secondary);font-size:0.78rem'>"
+        f"**{label}** &nbsp; {home} {_pct(probs['home'])} "
+        f"· D {_pct(probs['draw'])} "
+        f"· {away} {_pct(probs['away'])}"
+        f"</span>"
+    )
 
 
-def _match_tile(col, home: str, away: str, kickoff: str, venue: str,
-                home_score=None, away_score=None) -> None:
+# ── Match tile ────────────────────────────────────────────────────────────────
+
+def _match_tile(
+    col,
+    home: str,
+    away: str,
+    kickoff: str,
+    venue: str,
+    home_score=None,
+    away_score=None,
+    match_odds: dict | None = None,   # {elo: {...}, market: {...}} or None
+) -> None:
     hfi = get_flag_img(home if home not in ("TBD",) else None)
     afi = get_flag_img(away if away not in ("TBD",) else None)
     scored = home_score is not None
@@ -129,6 +144,7 @@ def _match_tile(col, home: str, away: str, kickoff: str, venue: str,
 
     with col:
         with st.container(border=True):
+            # ── Teams & score row ──
             c1, c2, c3 = st.columns([5, 3, 5])
             c1.markdown(f"{hfi}**{home}**", unsafe_allow_html=True)
             if scored:
@@ -143,10 +159,31 @@ def _match_tile(col, home: str, away: str, kickoff: str, venue: str,
                     unsafe_allow_html=True,
                 )
             c3.markdown(f"**{away}**{afi}", unsafe_allow_html=True)
+
+            # ── Fixture info ──
             st.caption(f"{badge}  ·  {to_cet(kickoff)}  ·  {venue or 'TBD'}")
 
+            # ── Implied odds rows (only for upcoming fixtures with two known teams) ──
+            if not scored and match_odds and home not in ("TBD",) and away not in ("TBD",):
+                elo_p = match_odds.get("elo")
+                mkt_p = match_odds.get("market")
+                lines = []
+                if elo_p:
+                    lines.append(_prob_row("ELO", home, away, elo_p))
+                if mkt_p:
+                    lines.append(_prob_row("MO", home, away, mkt_p))
+                if lines:
+                    st.markdown("<br>".join(lines), unsafe_allow_html=True)
 
-def _render_group_stage(token: str) -> None:
+
+def _cet_date_label(iso: str) -> str:
+    dt = datetime.fromisoformat(iso).astimezone(_CET)
+    return dt.strftime("%A, %d %B")
+
+
+# ── Stage renderers ───────────────────────────────────────────────────────────
+
+def _render_group_stage(token: str, odds_by_match: dict) -> None:
     data = api_client.get_stage_fixtures(token, "group")
     if not data or not data.get("fixtures"):
         st.info("Group stage fixtures not loaded yet.")
@@ -177,8 +214,8 @@ def _render_group_stage(token: str) -> None:
                     fx.get("stadium") or "",
                     fx.get("home_score"),
                     fx.get("away_score"),
+                    match_odds=odds_by_match.get(fx["match_id"]),
                 )
-            # Actual standings from finished matches
             _render_actual_standings(all_fixtures, group)
 
 
@@ -187,7 +224,6 @@ def _render_knockout_stage(token: str, stage: str) -> None:
     fixtures = (data or {}).get("fixtures", [])
 
     if not fixtures:
-        # Fall back to hardcoded placeholder bracket
         placeholder = _KO_PLACEHOLDERS.get(stage, [])
         if not placeholder:
             st.info("No fixtures available for this stage yet.")
@@ -200,11 +236,9 @@ def _render_knockout_stage(token: str, stage: str) -> None:
             st.markdown(f"**{date_label}**")
             cols = st.columns(min(len(matches), 2))
             for i, m in enumerate(matches):
-                _match_tile(cols[i % 2], m["home"], m["away"],
-                            m["kickoff"], m["venue"])
+                _match_tile(cols[i % 2], m["home"], m["away"], m["kickoff"], m["venue"])
         return
 
-    # Real fixtures (teams known)
     by_date2: dict[str, list] = defaultdict(list)
     for fx in fixtures:
         by_date2[_cet_date_label(fx["kickoff_utc"])].append(fx)
@@ -223,6 +257,23 @@ def _render_knockout_stage(token: str, stage: str) -> None:
             )
 
 
+# ── Legend ────────────────────────────────────────────────────────────────────
+
+def _render_legend(elo_available: bool, market_available: bool) -> None:
+    if not elo_available and not market_available:
+        return
+    st.divider()
+    lines = ["**Key**"]
+    if elo_available:
+        lines.append("**ELO** — Implied win probability from World Football Elo Ratings (historical team strength)")
+    if market_available:
+        lines.append("**MO** — Implied win probability from market odds (averaged across bookmakers via The Odds API, overround removed)")
+    lines.append("*Probabilities shown for upcoming fixtures only. Draws (D) are included as a third outcome.*")
+    st.caption("  \n".join(lines))
+
+
+# ── Main render ───────────────────────────────────────────────────────────────
+
 def render() -> None:
     st.header("📅 Fixtures & Results")
     token = st.session_state["session_token"]
@@ -230,7 +281,12 @@ def render() -> None:
     windows = api_client.get_windows(token)
     present_stages = {w["stage"] for w in windows if w["state"] != "pending"} if windows else set()
 
-    # Always show all rounds as tabs (use placeholders for unseeded knockout stages)
+    # Fetch odds once for the whole page (cached on backend, ~instant after first call).
+    odds_data = api_client.get_odds(token) or {}
+    odds_by_match: dict = odds_data.get("matches", {})
+    elo_available: bool = odds_data.get("elo_available", False)
+    market_available: bool = odds_data.get("market_available", False)
+
     tab_labels = [STAGE_LABELS.get(s, s) for s in ROUND_ORDER]
     tabs = st.tabs(tab_labels)
 
@@ -238,8 +294,10 @@ def render() -> None:
         with tab:
             if stage == "group":
                 if "group" in present_stages:
-                    _render_group_stage(token)
+                    _render_group_stage(token, odds_by_match)
                 else:
                     st.info("Group stage fixtures not loaded yet.")
             else:
                 _render_knockout_stage(token, stage)
+
+    _render_legend(elo_available, market_available)
