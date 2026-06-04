@@ -141,6 +141,18 @@ class SubmitSpecialsOut(BaseModel):
     saved: int
 
 
+class ResetPasswordIn(BaseModel):
+    email: EmailStr
+    new_password: str = Field(min_length=8)
+
+
+class CreateUserIn(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8)
+    display_name: str = Field(min_length=1, max_length=80)
+    is_admin: bool = False
+
+
 class LeaderboardRowOut(BaseModel):
     rank: int
     user_id: uuid.UUID
