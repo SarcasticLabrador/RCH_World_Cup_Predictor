@@ -11,7 +11,7 @@ from frontend.labels import stage_label, STATE_LABELS, to_cet
 
 def render() -> None:
     user = st.session_state["user"]
-    st.header(f"Welcome, {user['display_name']} ⚽")
+    st.header(f"Welcome, {user['display_name']}")
 
     windows = api_client.get_windows(st.session_state["session_token"])
     if not windows:
