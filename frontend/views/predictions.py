@@ -4,7 +4,7 @@ from __future__ import annotations
 import streamlit as st
 
 from frontend import api_client
-from frontend.flags import GROUP_MAP, get_flag
+from frontend.flags import GROUP_MAP, get_flag_img
 from frontend.labels import STATE_LABELS, stage_label, to_cet
 
 GROUPS = list("ABCDEFGHIJKL")
@@ -65,10 +65,12 @@ def _render_group_stage(token: str, state: str) -> None:
                 for fx in fixtures:
                     home = fx["home_team"] or "TBD"
                     away = fx["away_team"] or "TBD"
-                    hf, af = get_flag(fx.get("home_team")), get_flag(fx.get("away_team"))
+                    hfi = get_flag_img(fx.get("home_team"))
+                    afi = get_flag_img(fx.get("away_team"))
                     st.markdown(
-                        f"**{hf} {home}** vs **{away} {af}**  \n"
-                        f"*{to_cet(fx['kickoff_utc'])} · {fx.get('stadium') or 'TBD'}*"
+                        f"{hfi}**{home}** vs **{away}**{afi}  \n"
+                        f"*{to_cet(fx['kickoff_utc'])} · {fx.get('stadium') or 'TBD'}*",
+                        unsafe_allow_html=True,
                     )
                     ph = fx["predicted_home_score"]
                     pa = fx["predicted_away_score"]
@@ -126,10 +128,12 @@ def _render_ko_stage(token: str, stage: str, state: str) -> None:
         for fx in fixtures:
             home = fx["home_team"] or "TBD"
             away = fx["away_team"] or "TBD"
-            hf, af = get_flag(fx.get("home_team")), get_flag(fx.get("away_team"))
+            hfi = get_flag_img(fx.get("home_team"))
+            afi = get_flag_img(fx.get("away_team"))
             st.markdown(
-                f"**{hf} {home}** vs **{away} {af}**  \n"
-                f"*{to_cet(fx['kickoff_utc'])} · {fx.get('stadium') or 'TBD'}*"
+                f"{hfi}**{home}** vs **{away}**{afi}  \n"
+                f"*{to_cet(fx['kickoff_utc'])} · {fx.get('stadium') or 'TBD'}*",
+                unsafe_allow_html=True,
             )
             ph, pa = fx["predicted_home_score"], fx["predicted_away_score"]
             c1, c2, c3 = st.columns([3, 1, 1])
