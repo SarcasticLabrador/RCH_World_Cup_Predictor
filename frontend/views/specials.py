@@ -8,7 +8,7 @@ from frontend.labels import SPECIAL_LABELS, STATE_LABELS, TEAM_SPECIALS
 
 
 def render() -> None:
-    st.header("🏅 My Picks")
+    st.header("My Picks")
     st.caption(
         "Champion (25 pts), runner-up (10 pts) and the awards/team stats "
         "(10 pts each). These lock when the first group match kicks off."
