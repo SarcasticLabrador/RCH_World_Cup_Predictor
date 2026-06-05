@@ -123,21 +123,10 @@ def reset(
 def admin_seed(
     _admin: User = Depends(get_current_admin), db: Session = Depends(get_db)
 ) -> SeedOut:
-    """Pull fixtures (+ groups) from API-Football and seed the database."""
-    from backend.services import football_api
+    """Seed the database from hardcoded 2026 World Cup fixtures."""
+    from backend.services.wc2026_fixtures import get_2026_fixtures
 
-    raw_fixtures = football_api.fetch_fixtures()
-    if not raw_fixtures:
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY,
-            "API-Football returned no fixtures (check API key / season).",
-        )
-    try:
-        groups = football_api.extract_groups(football_api.fetch_standings())
-    except Exception:
-        groups = {}
-
-    normalized = football_api.normalize_fixtures(raw_fixtures)
-    stats = seeding.seed_world_cup(db, normalized, groups)
+    fixtures = get_2026_fixtures()
+    stats = seeding.seed_world_cup(db, fixtures)
     db.commit()
     return SeedOut(**stats)
