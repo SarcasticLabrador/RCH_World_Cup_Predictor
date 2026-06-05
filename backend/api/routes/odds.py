@@ -58,8 +58,8 @@ def get_odds(
         for t in db.scalars(select(Team).where(Team.id.in_(team_ids))).all()
     }
 
-    # Fetch data sources (both cached).
-    elo_ratings = elo_svc.fetch_elo_ratings()
+    # Fetch data sources (both cached — ELO from DB, odds from memory).
+    elo_ratings = elo_svc.fetch_elo_ratings(db)
     market_events = odds_svc.fetch_market_odds()
 
     result: dict[str, dict] = {}
