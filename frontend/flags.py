@@ -92,9 +92,9 @@ def get_flag(team_name: str | None) -> str:
 # Custom SVG overrides — take priority over FLAG_URLS.
 # Point these at raw.githubusercontent.com once the files are committed.
 CUSTOM_FLAG_URLS: dict[str, str] = {
-     "France":      "https://raw.githubusercontent.com/YOUR_ORG/YOUR_REPO/main/custom_flags/france.svg",
-     "Netherlands": "https://raw.githubusercontent.com/YOUR_ORG/YOUR_REPO/main/custom_flags/netherlands.svg",
-     "United States": "https://raw.githubusercontent.com/YOUR_ORG/YOUR_REPO/main/custom_flags/usa.svg",
+    # "France":      "https://raw.githubusercontent.com/YOUR_ORG/YOUR_REPO/main/custom_flags/france.svg",
+    # "Netherlands": "https://raw.githubusercontent.com/YOUR_ORG/YOUR_REPO/main/custom_flags/netherlands.svg",
+    # "United States": "https://raw.githubusercontent.com/YOUR_ORG/YOUR_REPO/main/custom_flags/usa.svg",
 }
 
 
