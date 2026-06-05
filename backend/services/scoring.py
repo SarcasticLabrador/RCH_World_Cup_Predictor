@@ -94,11 +94,23 @@ def score_all_group_predictions(db: Session, tournament: Tournament) -> int:
 # --- Bracket slot scoring ------------------------------------------------
 
 def _decisive_score(slot: BracketSlot) -> tuple[int, int] | None:
-    """Return the scoring scoreline: penalty if present, else regular."""
+    """Return the scoring scoreline a user should have predicted.
+
+    Regular time result (no penalties): the actual score, e.g. (2, 1).
+    Decided by penalties: regular time score with +1 added to the winning
+    side, e.g. 1-1 AET with home winning 4-3 on penalties → (2, 1).
+
+    This means users only enter one scoreline regardless of whether the
+    match went to penalties — the convention is transparent and unambiguous.
+    """
     if slot.home_score is None:
         return None
     if slot.penalty_home_score is not None:
-        return (slot.penalty_home_score, slot.penalty_away_score)
+        # Determine penalty winner and add 1 to their regular time score.
+        if slot.penalty_home_score > slot.penalty_away_score:
+            return (slot.home_score + 1, slot.away_score)
+        else:
+            return (slot.home_score, slot.away_score + 1)
     return (slot.home_score, slot.away_score)
 
 
