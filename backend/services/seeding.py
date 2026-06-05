@@ -4,6 +4,7 @@ Idempotent: keyed on external_id (matches) and match_number (bracket slots).
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -12,7 +13,22 @@ from sqlalchemy.orm import Session
 from backend.config import get_settings
 from backend.db.models import BracketSlot, Match, PredictionWindow, Team, Tournament
 from backend.enums import MatchStatus, Stage, TournamentStatus
-from backend.services.football_api import NormalizedMatch
+
+
+@dataclass
+class NormalizedMatch:
+    """Normalised fixture record passed to seed_world_cup()."""
+    external_id: str
+    stage: Stage
+    kickoff_utc: datetime
+    stadium: str | None
+    home_external_id: str | None
+    home_name: str | None
+    away_external_id: str | None
+    away_name: str | None
+    home_score: int | None
+    away_score: int | None
+    status: MatchStatus
 
 
 def get_or_create_tournament(db: Session, name: str | None = None) -> Tournament:
