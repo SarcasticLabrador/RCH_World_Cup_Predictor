@@ -83,6 +83,21 @@ def get_windows(session_token: str) -> list[dict]:
 
 
 @st.cache_data(ttl=120, show_spinner=False)
+
+@st.cache_data(ttl=120, show_spinner=False)
+def get_dashboard(session_token: str) -> dict | None:
+    try:
+        r = httpx.get(
+            f"{BACKEND_URL}/dashboard",
+            headers=_auth_headers(session_token),
+            timeout=20.0,
+        )
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return None
+
+
 def get_stage_fixtures(session_token: str, stage: str) -> dict | None:
     r = httpx.get(
         f"{BACKEND_URL}/predictions/fixtures",
@@ -192,16 +207,6 @@ def admin_set_special_result(session_token: str, category: str, value: str) -> d
         json={"category": category, "actual_value": value},
         headers=_auth_headers(session_token),
         timeout=_TIMEOUT,
-    )
-    r.raise_for_status()
-    return r.json()
-
-
-def admin_refresh_results(session_token: str) -> dict:
-    r = httpx.post(
-        f"{BACKEND_URL}/admin/refresh-results",
-        headers=_auth_headers(session_token),
-        timeout=60.0,
     )
     r.raise_for_status()
     return r.json()
