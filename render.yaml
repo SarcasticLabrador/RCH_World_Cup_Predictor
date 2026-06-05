@@ -41,8 +41,6 @@ services:
         sync: false
       - key: ADMIN_EMAILS          # your email, to grant admin
         sync: false
-      - key: API_FOOTBALL_KEY
-        sync: false
       - key: GEMINI_API_KEY        # optional; enables the AI Match Centre
         sync: false
       - key: ODDS_API_KEY          # optional; enables market odds display (the-odds-api.com)
