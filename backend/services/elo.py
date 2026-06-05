@@ -40,9 +40,10 @@ def _norm(name: str) -> str:
 # CSV dataset name → our database name.
 # Only entries where the two spellings genuinely differ.
 _CSV_TO_DB: dict[str, str] = {
-    "czech republic": "czechia",
-    "turkey":         "turkiye",
-    "ivory coast":    "côte d'ivoire",
+    "czech republic":       "czechia",
+    "turkey":               "turkiye",
+    "united states":        "usa",
+    "bosnia and herzegovina": "bosnia & herzegovina",
 }
 
 # Reverse map with normalised keys so diacritics in DB names don't break lookup.
