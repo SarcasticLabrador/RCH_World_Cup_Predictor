@@ -376,3 +376,13 @@ def get_odds(session_token: str) -> dict | None:
         return r.json()
     except Exception:
         return None
+
+
+def admin_clear_results(session_token: str) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/admin/clear-results",
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
