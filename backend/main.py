@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from backend.api.routes import admin, ai, auth, bracket, health, leaderboard, odds, predictions, specials, tasks
+from backend.api.routes import admin, ai, auth, bracket, dashboard, health, leaderboard, odds, predictions, specials, tasks
 from backend.config import get_settings
 from backend.db.base import Base, engine
 from backend.scheduler import shutdown_scheduler, start_scheduler
@@ -22,15 +22,17 @@ settings = get_settings()
 
 
 async def _prewarm_elo() -> None:
-    """Download and compute ELO ratings in the background at startup.
-
-    Runs in a thread so it doesn't block the event loop. The result is cached
-    for 24 hours, so the first user request to /odds gets an instant response
-    instead of waiting for the CSV download.
-    """
+    """Load ELO ratings from DB (or fetch if stale) in the background at startup."""
     try:
+        from backend.db.base import SessionLocal
         from backend.services.elo import fetch_elo_ratings
-        await asyncio.get_event_loop().run_in_executor(None, fetch_elo_ratings)
+        db = SessionLocal()
+        try:
+            await asyncio.get_event_loop().run_in_executor(
+                None, lambda: fetch_elo_ratings(db)
+            )
+        finally:
+            db.close()
         log.info("ELO ratings pre-warmed successfully")
     except Exception as exc:
         log.warning("ELO pre-warm failed (non-fatal): %s", exc)
@@ -41,10 +43,11 @@ async def lifespan(_app: FastAPI):
     Base.metadata.create_all(bind=engine)
     start_scheduler()
     # Fire-and-forget: pre-warm ELO cache without blocking startup.
-    asyncio.create_task(_prewarm_elo())
+    task = asyncio.ensure_future(_prewarm_elo())
     try:
         yield
     finally:
+        task.cancel()
         shutdown_scheduler()
 
 
@@ -52,6 +55,7 @@ app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(dashboard.router)
 app.include_router(predictions.router)
 app.include_router(bracket.router)
 app.include_router(odds.router)
