@@ -23,6 +23,7 @@ def _reset_expander(token: str, stage: str, group: str | None, label: str) -> No
                 try:
                     api_client.reset_predictions(token, stage, group)
                     api_client.get_stage_fixtures.clear()
+                    api_client.get_bracket_slots.clear()
                     st.success("Predictions cleared.")
                     st.rerun()
                 except Exception as e:
@@ -145,7 +146,8 @@ def _render_group_stage(token: str, state: str) -> None:
                          for mid, (h, a) in inputs.items()]
                 try:
                     resp = api_client.submit_predictions(token, "group", items)
-                    api_client.get_stage_fixtures.clear()  # force fresh fetch on rerun
+                    api_client.get_stage_fixtures.clear()   # fresh fixtures on rerun
+                    api_client.get_bracket_slots.clear()     # bracket derives from group preds
                     st.success(f"Saved {resp['saved']} prediction(s).")
                     st.rerun()
                 except Exception:
