@@ -278,11 +278,11 @@ def render() -> None:
     st.header("📅 Fixtures & Results")
     token = st.session_state["session_token"]
 
-    windows = api_client.get_windows(token)
-    present_stages = {w["stage"] for w in windows if w["state"] != "pending"} if windows else set()
+    dash = api_client.get_dashboard(token) or {}
+    windows = dash.get("windows") or api_client.get_windows(token) or []
+    present_stages = {w["stage"] for w in windows if w["state"] != "pending"}
 
-    # Fetch odds once for the whole page (cached on backend, ~instant after first call).
-    odds_data = api_client.get_odds(token) or {}
+    odds_data = dash.get("odds") or {}
     odds_by_match: dict = odds_data.get("matches", {})
     elo_available: bool = odds_data.get("elo_available", False)
     market_available: bool = odds_data.get("market_available", False)
