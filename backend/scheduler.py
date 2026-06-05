@@ -46,6 +46,19 @@ def _snapshot_job() -> None:
         db.close()
 
 
+def _elo_refresh_job() -> None:
+    from backend.services.elo import refresh_if_stale
+    db = SessionLocal()
+    try:
+        refreshed = refresh_if_stale(db)
+        if refreshed:
+            logger.info("ELO ratings refreshed by weekly scheduler")
+    except Exception:
+        logger.exception("ELO refresh job crashed")
+    finally:
+        db.close()
+
+
 def start_scheduler() -> None:
     global _scheduler
     settings = get_settings()
@@ -65,9 +78,14 @@ def start_scheduler() -> None:
         CronTrigger(hour=settings.snapshot_hour_cet, minute=0, timezone="Europe/Berlin"),
         id="daily_snapshot",
     )
+    _scheduler.add_job(
+        _elo_refresh_job,
+        CronTrigger(day_of_week="mon", hour=3, minute=0, timezone="UTC"),
+        id="weekly_elo_refresh",
+    )
     _scheduler.start()
     logger.info(
-        "Scheduler started (maintenance every %s min, snapshot at %02d:00 CET).",
+        "Scheduler started (maintenance every %s min, snapshot at %02d:00 CET, ELO refresh Mondays 03:00 UTC).",
         settings.results_poll_minutes,
         settings.snapshot_hour_cet,
     )
