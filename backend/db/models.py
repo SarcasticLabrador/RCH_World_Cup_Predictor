@@ -314,6 +314,20 @@ class LeaderboardSnapshot(Base):
     snapshot_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class EloCache(Base):
+    """Persisted ELO ratings so they survive backend restarts.
+
+    A single row per team, updated weekly via the scheduler.
+    """
+
+    __tablename__ = "elo_cache"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID, primary_key=True, default=new_uuid)
+    team_key: Mapped[str] = mapped_column(String(120), nullable=False, unique=True, index=True)
+    rating: Mapped[float] = mapped_column(nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class SpecialResult(Base):
     """Actual outcomes for special-prediction categories (admin-entered)."""
 
