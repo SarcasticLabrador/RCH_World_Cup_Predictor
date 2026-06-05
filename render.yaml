@@ -29,14 +29,6 @@ services:
         sync: false
       - key: APP_BASE_URL          # your Streamlit app URL, e.g. https://your-app.streamlit.app
         sync: false
-      - key: EMAIL_PROVIDER
-        value: brevo
-      - key: BREVO_API_KEY
-        sync: false
-      - key: EMAIL_FROM            # your verified Brevo single-sender address
-        sync: false
-      - key: EMAIL_FROM_NAME
-        value: "World Cup Predictor"
       - key: EMAIL_WHITELIST       # e.g. @yourcompany.com
         sync: false
       - key: ADMIN_EMAILS          # your email, to grant admin
