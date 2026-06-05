@@ -138,10 +138,22 @@ def derive_bracket(
             return rows[pos].name
         return None  # not enough predictions to determine
 
+    def group_complete(grp: str) -> bool:
+        """True only when all 6 group matches have predictions."""
+        matches = matches_by_group.get(grp, [])
+        return len(matches) == 6 and all(m.id in group_preds for m in matches)
+
     # --- Step 2: assign Best 3rd teams to R32 slots ---
-    ranked_thirds = st_svc.rank_third_placed(standings_by_group)
+    # Only run third-place assignment when every group is fully predicted.
+    # This prevents alphabetically-seeded ghost teams appearing in Best-3rd
+    # slots when predictions are absent or incomplete.
+    all_groups_complete = all(group_complete(g) for g in GROUPS)
     eligibility = _slot_eligibility()
-    third_assignments = st_svc.assign_third_to_slots(ranked_thirds, eligibility)
+    if all_groups_complete:
+        ranked_thirds = st_svc.rank_third_placed(standings_by_group)
+        third_assignments = st_svc.assign_third_to_slots(ranked_thirds, eligibility)
+    else:
+        third_assignments = {}  # Best-3rd slots stay TBD until all groups predicted
 
     # --- Step 3: build R32 bracket ---
     bracket: dict[int, BracketState] = {}
