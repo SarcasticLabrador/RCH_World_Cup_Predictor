@@ -147,12 +147,12 @@ def _render_group_stage(token: str, state: str, data: dict | None = None) -> Non
                          for mid, (h, a) in inputs.items()]
                 try:
                     resp = api_client.submit_predictions(token, "group", items)
-                    api_client.get_stage_fixtures.clear()   # fresh fixtures on rerun
-                    api_client.get_bracket_slots.clear()     # bracket derives from group preds
+                    api_client.get_stage_fixtures.clear()
+                    api_client.get_bracket_slots.clear()
                     st.success(f"Saved {resp['saved']} prediction(s).")
                     st.rerun()
-                except Exception:
-                    st.error("Couldn't save — the window may have just closed.")
+                except Exception as e:
+                    st.error(f"Couldn't save: {e}")
 
             # Standings from saved predictions
             _render_standings_table(all_fixtures, group)
