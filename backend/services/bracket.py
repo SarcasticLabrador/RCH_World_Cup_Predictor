@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import NamedTuple
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from backend.db.models import BracketPrediction, BracketSlot, Match, Team, Tournament, User
 from backend.enums import Stage
@@ -46,9 +46,14 @@ def _group_matches_by_group(
 ) -> dict[str, list[Match]]:
     """Load all group stage matches indexed by group letter."""
     all_matches = db.scalars(
-        select(Match).where(
+        select(Match)
+        .where(
             Match.tournament_id == tournament.id,
             Match.stage == Stage.GROUP,
+        )
+        .options(
+            selectinload(Match.home_team),
+            selectinload(Match.away_team),
         )
     ).all()
     # Eagerly load team relationships.
