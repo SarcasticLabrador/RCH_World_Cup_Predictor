@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 
 import httpx
+import streamlit as st
 
 
 def _resolve_backend_url() -> str:
@@ -68,6 +69,7 @@ def update_profile(session_token: str, display_name: str) -> dict:
 
 # --- Predictions (Phase 3) ---
 
+@st.cache_data(ttl=300, show_spinner=False)
 def get_windows(session_token: str) -> list[dict]:
     r = httpx.get(
         f"{BACKEND_URL}/predictions/windows",
@@ -80,6 +82,7 @@ def get_windows(session_token: str) -> list[dict]:
     return r.json()
 
 
+@st.cache_data(ttl=120, show_spinner=False)
 def get_stage_fixtures(session_token: str, stage: str) -> dict | None:
     r = httpx.get(
         f"{BACKEND_URL}/predictions/fixtures",
@@ -291,6 +294,7 @@ def submit_specials(session_token: str, items: list[dict]) -> dict:
     return r.json()
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_teams(session_token: str) -> list[dict]:
     r = httpx.get(
         f"{BACKEND_URL}/specials/teams",
@@ -303,6 +307,7 @@ def get_teams(session_token: str) -> list[dict]:
     return r.json()
 
 
+@st.cache_data(ttl=120, show_spinner=False)
 def get_leaderboard(session_token: str) -> dict | None:
     r = httpx.get(
         f"{BACKEND_URL}/leaderboard",
@@ -328,6 +333,7 @@ def get_match_centre(session_token: str, news: bool = False, refresh: bool = Fal
     return r.json()
 
 
+@st.cache_data(ttl=120, show_spinner=False)
 def get_bracket_slots(session_token: str) -> dict | None:
     try:
         r = httpx.get(
@@ -353,6 +359,7 @@ def submit_bracket_predictions(session_token: str, items: list[dict]) -> dict:
 
 
 
+@st.cache_data(ttl=600, show_spinner=False)
 def get_odds(session_token: str) -> dict | None:
     try:
         r = httpx.get(
