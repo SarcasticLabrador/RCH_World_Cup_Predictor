@@ -31,12 +31,7 @@ def render() -> None:
     # ── Maintenance buttons ──────────────────────────────────────────────────
     st.subheader("Results & scoring")
     c1, c2 = st.columns(2)
-    if c1.button("🔄 Refresh results from API-Football"):
-        try:
-            out = api_client.admin_refresh_results(token)
-            st.success(f"Refreshed. {out}")
-        except Exception:
-            st.error("Refresh failed — check the API key on the server.")
+
     if c2.button("♻️ Re-score now"):
         try:
             out = api_client.admin_rescore(token)
@@ -216,6 +211,25 @@ def render() -> None:
                     st.success(f"Account created for {result['display_name']} ({result['email']}).")
                 except Exception as e:
                     st.error("Email already in use." if "409" in str(e) else "Account creation failed.")
+
+    st.divider()
+    st.subheader("⚠️ Clear all match results")
+    st.caption(
+        "Resets every group stage match and knockout slot back to 'scheduled' with no scores. "
+        "All awarded points are also nullified. Predictions are NOT affected."
+    )
+    with st.expander("Clear all results (irreversible)"):
+        st.warning("This wipes all real match results and resets all points. Cannot be undone.")
+        if st.checkbox("I understand — clear everything", key="confirm_clear_results"):
+            if st.button("Clear all results now", key="do_clear_results", type="primary"):
+                try:
+                    out = api_client.admin_clear_results(token)
+                    st.success(
+                        f"Cleared {out['matches_cleared']} group matches "
+                        f"and {out['slots_cleared']} bracket slots."
+                    )
+                except Exception as e:
+                    st.error(f"Failed: {e}")
 
     st.divider()
     st.subheader("Team stats (computed)")
