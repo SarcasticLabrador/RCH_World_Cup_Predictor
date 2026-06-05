@@ -27,7 +27,8 @@ def render() -> None:
     token = st.session_state["session_token"]
     me = st.session_state["user"]["id"]
 
-    data = api_client.get_leaderboard(token)
+    dash = api_client.get_dashboard(token)
+    data = (dash or {}).get("leaderboard") or api_client.get_leaderboard(token)
     if data is None:
         st.info("Fixtures haven't been loaded yet — no standings to show.")
         return
