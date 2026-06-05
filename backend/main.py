@@ -6,6 +6,8 @@ without needing to touch the existing wiring.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -15,15 +17,31 @@ from backend.config import get_settings
 from backend.db.base import Base, engine
 from backend.scheduler import shutdown_scheduler, start_scheduler
 
+log = logging.getLogger(__name__)
 settings = get_settings()
+
+
+async def _prewarm_elo() -> None:
+    """Download and compute ELO ratings in the background at startup.
+
+    Runs in a thread so it doesn't block the event loop. The result is cached
+    for 24 hours, so the first user request to /odds gets an instant response
+    instead of waiting for the CSV download.
+    """
+    try:
+        from backend.services.elo import fetch_elo_ratings
+        await asyncio.get_event_loop().run_in_executor(None, fetch_elo_ratings)
+        log.info("ELO ratings pre-warmed successfully")
+    except Exception as exc:
+        log.warning("ELO pre-warm failed (non-fatal): %s", exc)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # For Phase 1 we create tables directly. (Alembic migrations can be added
-    # later if the schema starts changing in production.)
     Base.metadata.create_all(bind=engine)
     start_scheduler()
+    # Fire-and-forget: pre-warm ELO cache without blocking startup.
+    asyncio.create_task(_prewarm_elo())
     try:
         yield
     finally:
