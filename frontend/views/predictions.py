@@ -83,12 +83,13 @@ def _render_standings_table(fixtures: list[dict], group: str) -> None:
 
 # ── Group stage predictions ───────────────────────────────────────────────────
 
-def _render_group_stage(token: str, state: str) -> None:
+def _render_group_stage(token: str, state: str, data: dict | None = None) -> None:
     editable = state == "open"
     if not editable:
         st.info(f"Group stage predictions are **{STATE_LABELS.get(state, state)}**.")
 
-    data = api_client.get_stage_fixtures(token, "group")
+    if data is None:
+        data = api_client.get_stage_fixtures(token, "group")
     if not data or not data.get("fixtures"):
         st.info("No group stage fixtures loaded yet.")
         return
@@ -169,8 +170,9 @@ _BRACKET_STAGE_LABELS = {
 }
 
 
-def _render_bracket(token: str) -> None:
-    data = api_client.get_bracket_slots(token)
+def _render_bracket(token: str, data: dict | None = None) -> None:
+    if data is None:
+        data = api_client.get_bracket_slots(token)
     if not data or not data.get("slots"):
         st.info("Bracket slots haven't been seeded yet. Run the manual seed endpoint first.")
         return
@@ -246,18 +248,19 @@ def render() -> None:
     st.header("🔮 Match predictions")
     token = st.session_state["session_token"]
 
-    windows = api_client.get_windows(token)
-    if not windows:
+    dash = api_client.get_dashboard(token)
+    if not dash:
         st.info("Fixtures haven't been loaded yet.")
         return
 
+    windows = dash.get("windows") or []
     group_window = next((w for w in windows if w["stage"] == "group"), None)
     group_state = group_window["state"] if group_window else "pending"
 
     group_tab, bracket_tab = st.tabs(["Group Stage", "Bracket & Knockouts"])
 
     with group_tab:
-        _render_group_stage(token, group_state)
+        _render_group_stage(token, group_state, dash.get("group_fixtures"))
 
     with bracket_tab:
-        _render_bracket(token)
+        _render_bracket(token, dash.get("bracket_slots"))
