@@ -214,27 +214,34 @@ def render() -> None:
 
 
     st.divider()
-    st.subheader("🔒 Lock all predictions")
+    st.subheader("🔒 Prediction lock")
     st.caption(
-        "Immediately closes every prediction window. "
-        "No user will be able to submit or edit any prediction after this. "
-        "This cannot be undone without direct database access."
+        "When locked, no user can submit or modify any prediction — "
+        "group stage, knockout bracket, or individual awards. "
+        "You can unlock at any time if needed."
     )
-    with st.expander("Lock all predictions now (irreversible)"):
-        st.warning(
-            "This permanently locks group stage, bracket, and individual award predictions "
-            "for all users. Use only when the prediction deadline has passed."
-        )
-        if st.checkbox("I understand — lock everything", key="confirm_lock_all"):
-            if st.button("Lock all predictions", key="do_lock_all", type="primary"):
-                try:
-                    out = api_client.admin_lock_all(token)
-                    st.success(
-                        f"Locked. {out['windows_locked']} prediction window(s) closed. "
-                        "No further predictions can be submitted."
-                    )
-                except Exception as e:
-                    st.error(f"Failed: {e}")
+    dash = api_client.get_dashboard(token) or {}
+    # Read current lock state from the tournament (fall back to unlocked).
+    currently_locked = False  # dashboard doesn't expose this yet; rely on toggle feedback
+
+    col_lock, col_unlock = st.columns(2)
+    if col_lock.button("🔒 Lock all predictions", key="do_lock", type="primary"):
+        try:
+            out = api_client.admin_set_predictions_lock(token, locked=True)
+            if hasattr(api_client.get_dashboard, "clear"):
+                api_client.get_dashboard.clear()
+            st.success("All predictions are now locked.")
+        except Exception as e:
+            st.error(f"Failed: {e}")
+
+    if col_unlock.button("🔓 Unlock all predictions", key="do_unlock"):
+        try:
+            out = api_client.admin_set_predictions_lock(token, locked=False)
+            if hasattr(api_client.get_dashboard, "clear"):
+                api_client.get_dashboard.clear()
+            st.success("Predictions are now unlocked.")
+        except Exception as e:
+            st.error(f"Failed: {e}")
 
     st.divider()
     st.subheader("⚠️ Clear all match results")
