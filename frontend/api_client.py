@@ -386,3 +386,13 @@ def admin_clear_results(session_token: str) -> dict:
     )
     r.raise_for_status()
     return r.json()
+
+
+def admin_lock_all(session_token: str) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/admin/lock-all",
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
