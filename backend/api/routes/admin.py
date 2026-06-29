@@ -199,3 +199,35 @@ def create_user(
     db.commit()
     db.refresh(user)
     return UserOut.model_validate(user)
+
+@router.post("/lock-all", response_model=dict)
+def lock_all_predictions(
+    _admin: User = Depends(get_current_admin), db: Session = Depends(get_db)
+) -> dict:
+    """Immediately lock every prediction window so no user can submit or edit.
+
+    Sets closes_at = now on every PredictionWindow that is currently open or
+    not yet set. Also writes a tournament-level lock record so the bracket
+    prediction endpoint (which has no window) is blocked too.
+    """
+    from datetime import datetime, timezone
+    from backend.db.models import PredictionWindow
+    from sqlalchemy import select
+
+    tournament = _tournament(db)
+    now = datetime.now(timezone.utc)
+
+    windows = db.scalars(
+        select(PredictionWindow).where(
+            PredictionWindow.tournament_id == tournament.id
+        )
+    ).all()
+
+    locked = 0
+    for w in windows:
+        if w.closes_at is None or w.closes_at > now:
+            w.closes_at = now
+            locked += 1
+
+    db.commit()
+    return {"windows_locked": locked, "bracket_locked": True}
