@@ -108,6 +108,24 @@ def submit_bracket_predictions(
 ) -> SubmitPredictionsOut:
     """Upsert bracket slot predictions for the current user."""
     tournament = _tournament(db)
+    # Bracket predictions are locked when the group window is closed
+    # (triggered by /admin/lock-all which back-dates all closes_at to now).
+    from backend.db.models import PredictionWindow
+    from backend.enums import Stage as StageEnum
+    from sqlalchemy import select as _select
+    from datetime import datetime, timezone
+    group_window = db.scalar(
+        _select(PredictionWindow).where(
+            PredictionWindow.tournament_id == tournament.id,
+            PredictionWindow.stage == StageEnum.GROUP,
+        )
+    )
+    now = datetime.now(timezone.utc)
+    if group_window and group_window.closes_at and group_window.closes_at <= now:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "All predictions are locked — no changes are possible.",
+        )
 
     valid_slot_ids = {
         s.id for s in db.scalars(
