@@ -177,7 +177,7 @@ _BRACKET_STAGE_LABELS = {
 }
 
 
-def _render_bracket(token: str, data: dict | None = None) -> None:
+def _render_bracket(token: str, data: dict | None = None, fixtures_data: dict | None = None, predictions_state: str = "open", predictions_locked: bool = False) -> None:
     if data is None:
         data = api_client.get_bracket_slots(token)
     if not data or not data.get("slots"):
