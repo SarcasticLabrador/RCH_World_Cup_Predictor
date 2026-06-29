@@ -75,6 +75,7 @@ class Tournament(Base):
     status: Mapped[TournamentStatus] = mapped_column(
         _enum(TournamentStatus), default=TournamentStatus.UPCOMING, nullable=False
     )
+    predictions_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     teams: Mapped[list["Team"]] = relationship(
         back_populates="tournament", cascade="all, delete-orphan"
