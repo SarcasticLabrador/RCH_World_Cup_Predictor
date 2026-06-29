@@ -83,9 +83,11 @@ def _render_standings_table(fixtures: list[dict], group: str) -> None:
 
 # ── Group stage predictions ───────────────────────────────────────────────────
 
-def _render_group_stage(token: str, state: str, data: dict | None = None) -> None:
-    editable = state == "open"
-    if not editable:
+def _render_group_stage(token: str, state: str, data: dict | None = None, predictions_locked: bool = False) -> None:
+    editable = state == "open" and not predictions_locked
+    if predictions_locked:
+        st.error("🔒 All predictions are locked — no further changes are possible.")
+    elif not editable:
         st.info(f"Group stage predictions are **{STATE_LABELS.get(state, state)}**.")
 
     if data is None:
