@@ -269,10 +269,13 @@ def render() -> None:
     group_window = next((w for w in windows if w["stage"] == "group"), None)
     group_state = group_window["state"] if group_window else "pending"
 
+    predictions_locked = dash.get("predictions_locked", False)
+
     group_tab, bracket_tab = st.tabs(["Group Stage", "Bracket & Knockouts"])
 
     with group_tab:
-        _render_group_stage(token, group_state, dash.get("group_fixtures"))
+        _render_group_stage(token, group_state, dash.get("group_fixtures"), predictions_locked)
 
     with bracket_tab:
-        _render_bracket(token, dash.get("bracket_slots"))
+        _render_bracket(token, dash.get("bracket_slots"), dash.get("group_fixtures"),
+                        group_state, predictions_locked)
