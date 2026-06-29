@@ -198,10 +198,10 @@ def _render_bracket(token: str, data: dict | None = None) -> None:
     for tab, stage in zip(tabs, stages_present):
         with tab:
             stage_slots = sorted(by_stage[stage], key=lambda s: s["match_number"])
-            _render_bracket_stage(token, stage, stage_slots)
+            _render_bracket_stage(token, stage, stage_slots, predictions_locked)
 
 
-def _render_bracket_stage(token: str, stage: str, slots: list[dict]) -> None:
+def _render_bracket_stage(token: str, stage: str, slots: list[dict], predictions_locked: bool = False) -> None:
     with st.form(f"bracket_{stage}"):
         inputs: dict = {}
         for sl in slots:
@@ -226,18 +226,22 @@ def _render_bracket_stage(token: str, stage: str, slots: list[dict]) -> None:
             c1.caption(sl["venue"] or "")
             h_val = c2.number_input(home, min_value=0, max_value=30,
                 value=ph if ph is not None else 0,
-                key=f"bh_{sl['slot_id']}", label_visibility="collapsed")
+                key=f"bh_{sl['slot_id']}", label_visibility="collapsed",
+                disabled=predictions_locked)
             a_val = c3.number_input(away, min_value=0, max_value=30,
                 value=pa if pa is not None else 0,
-                key=f"ba_{sl['slot_id']}", label_visibility="collapsed")
+                key=f"ba_{sl['slot_id']}", label_visibility="collapsed",
+                disabled=predictions_locked)
             inputs[sl["slot_id"]] = (int(h_val), int(a_val))
             st.divider()
 
         submitted = st.form_submit_button(
-            f"Save {_BRACKET_STAGE_LABELS[stage]} predictions", type="primary"
+            f"Save {_BRACKET_STAGE_LABELS[stage]} predictions",
+            type="primary",
+            disabled=predictions_locked,
         )
 
-    if submitted:
+    if submitted and not predictions_locked:
         items = [{"slot_id": sid, "home_score": h, "away_score": a}
                  for sid, (h, a) in inputs.items()]
         try:
