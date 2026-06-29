@@ -99,6 +99,12 @@ def submit(
 ) -> SubmitPredictionsOut:
     tournament = _require_tournament(db)
     stage_enum = _parse_stage(body.stage)
+    window = pred_service.get_window(db, tournament, stage_enum)
+    if pred_service.window_state(window) != "open":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Prediction window is closed — no changes are possible.",
+        )
     items = [(p.match_id, p.home_score, p.away_score) for p in body.predictions]
     saved = pred_service.submit_predictions(db, current, tournament, stage_enum, items)
     db.commit()
@@ -114,6 +120,12 @@ def reset(
     """Delete a user's predictions for a stage (or a single group within it)."""
     tournament = _require_tournament(db)
     stage_enum = _parse_stage(body.stage)
+    window = pred_service.get_window(db, tournament, stage_enum)
+    if pred_service.window_state(window) != "open":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Prediction window is closed — no changes are possible.",
+        )
     deleted = pred_service.reset_predictions(db, current, tournament, stage_enum, body.group)
     db.commit()
     return SubmitPredictionsOut(saved=deleted)
