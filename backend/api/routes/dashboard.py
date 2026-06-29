@@ -246,4 +246,5 @@ def get_dashboard(
         log.warning("Dashboard: odds failed — %s", exc)
         result["odds"] = {"elo_available": False, "market_available": False, "matches": {}}
 
+    result["predictions_locked"] = getattr(tournament, "predictions_locked", False)
     return result
