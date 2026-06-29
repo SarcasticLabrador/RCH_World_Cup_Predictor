@@ -388,9 +388,10 @@ def admin_clear_results(session_token: str) -> dict:
     return r.json()
 
 
-def admin_lock_all(session_token: str) -> dict:
+def admin_set_predictions_lock(session_token: str, locked: bool) -> dict:
     r = httpx.post(
-        f"{BACKEND_URL}/admin/lock-all",
+        f"{BACKEND_URL}/admin/lock-predictions",
+        params={"locked": str(locked).lower()},
         headers=_auth_headers(session_token),
         timeout=_TIMEOUT,
     )
