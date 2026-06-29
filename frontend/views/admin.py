@@ -212,6 +212,30 @@ def render() -> None:
                 except Exception as e:
                     st.error("Email already in use." if "409" in str(e) else "Account creation failed.")
 
+
+    st.divider()
+    st.subheader("🔒 Lock all predictions")
+    st.caption(
+        "Immediately closes every prediction window. "
+        "No user will be able to submit or edit any prediction after this. "
+        "This cannot be undone without direct database access."
+    )
+    with st.expander("Lock all predictions now (irreversible)"):
+        st.warning(
+            "This permanently locks group stage, bracket, and individual award predictions "
+            "for all users. Use only when the prediction deadline has passed."
+        )
+        if st.checkbox("I understand — lock everything", key="confirm_lock_all"):
+            if st.button("Lock all predictions", key="do_lock_all", type="primary"):
+                try:
+                    out = api_client.admin_lock_all(token)
+                    st.success(
+                        f"Locked. {out['windows_locked']} prediction window(s) closed. "
+                        "No further predictions can be submitted."
+                    )
+                except Exception as e:
+                    st.error(f"Failed: {e}")
+
     st.divider()
     st.subheader("⚠️ Clear all match results")
     st.caption(
