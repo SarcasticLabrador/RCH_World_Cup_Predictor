@@ -213,6 +213,35 @@ def render() -> None:
                     st.error("Email already in use." if "409" in str(e) else "Account creation failed.")
 
 
+
+    st.divider()
+    st.subheader("🧪 Rescore preview (dry run)")
+    st.caption(
+        "Simulates a full rescore under the current scoring rules and shows "
+        "the old vs new leaderboard side by side. Nothing is saved — "
+        "users see no change until you press 'Re-score now'."
+    )
+    if st.button("Run rescore preview", key="do_rescore_preview"):
+        try:
+            with st.spinner("Simulating rescore..."):
+                out = api_client.admin_rescore_preview(token)
+            rows = out.get("rows", [])
+            table = [
+                {
+                    "Player": r["display_name"],
+                    "Old total": r["old_total_pts"],
+                    "New total": r["new_total_pts"],
+                    "Δ": r["delta"],
+                    "Old rank": r["old_rank"],
+                    "New rank": r["new_rank"],
+                }
+                for r in rows
+            ]
+            st.dataframe(table, use_container_width=True, hide_index=True)
+            st.caption("To apply these changes for everyone, press 'Re-score now' above.")
+        except Exception as e:
+            st.error(f"Preview failed: {e}")
+
     st.divider()
     st.subheader("🔒 Prediction lock")
     st.caption(
