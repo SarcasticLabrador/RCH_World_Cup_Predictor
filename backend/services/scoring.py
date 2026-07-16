@@ -118,60 +118,143 @@ def score_bracket_prediction(
     stage: Stage,
     pred_home: int,
     pred_away: int,
-    decisive_home: int,
-    decisive_away: int,
+    decisive: tuple[int, int] | None,
+    pred_winner_team: str | None,
+    pred_loser_team: str | None,
+    round_advancers: set[str],
+    actual_champion: str | None,
+    actual_runner_up: str | None,
 ) -> int:
-    """Score a single bracket slot prediction."""
-    pred_winner_home = pred_home >= pred_away   # home wins (or draw → home)
-    actual_winner_home = decisive_home >= decisive_away
-    exact = pred_home == decisive_home and pred_away == decisive_away
+    """Score a single bracket slot prediction (TEAM-BASED).
+
+    Advancing-team points (2 pts / 25+10 for the final) are awarded on the
+    NAMED TEAM: the team the user predicted to win this slot must actually
+    have advanced from this round (any slot). The exact score bonus is
+    slot-based and independent — matching the actual scoreline of this slot
+    earns the bonus even if the predicted teams were wrong (consolation rule).
+    """
+    pts = 0
+    exact = (
+        decisive is not None
+        and pred_home == decisive[0]
+        and pred_away == decisive[1]
+    )
 
     if stage == Stage.FINAL:
-        if pred_winner_home == actual_winner_home:
-            pts = FINAL_CHAMPION_PTS + FINAL_RUNNER_UP_PTS
-            if exact:
-                pts += FINAL_EXACT_BONUS
-            return pts
-        return 0
-
-    # Non-final knockout
-    pts = 0
-    if pred_winner_home == actual_winner_home:
-        pts += KO_WINNER_PTS
+        if pred_winner_team and actual_champion and pred_winner_team == actual_champion:
+            pts += FINAL_CHAMPION_PTS
+        if pred_loser_team and actual_runner_up and pred_loser_team == actual_runner_up:
+            pts += FINAL_RUNNER_UP_PTS
         if exact:
-            pts += KO_EXACT_BONUS
+            pts += FINAL_EXACT_BONUS
+        return pts
+
+    if pred_winner_team and pred_winner_team in round_advancers:
+        pts += KO_WINNER_PTS
+    if exact:
+        pts += KO_EXACT_BONUS
     return pts
 
 
 def score_all_bracket_predictions(db: Session, tournament: Tournament) -> int:
-    slots = {
+    """Score every bracket prediction using team-based advancing logic.
+
+    Requires deriving (a) the actual bracket from real results and (b) each
+    user's predicted bracket from their group predictions. Both use the same
+    derivation engine in services/bracket.py.
+    """
+    from collections import defaultdict as _dd
+    from backend.db.models import User
+    from backend.services import bracket as bracket_svc
+
+    slots_by_id = {
         s.id: s
         for s in db.scalars(
             select(BracketSlot).where(BracketSlot.tournament_id == tournament.id)
         ).all()
     }
+    slots_by_number = {s.match_number: s for s in slots_by_id.values()}
+
+    # --- Actual bracket: teams per slot from real results ---
+    actual = bracket_svc.derive_actual_bracket(db, tournament)
+
+    def actual_slot_winner_loser(mn: int) -> tuple[str | None, str | None]:
+        state = actual.get(mn)
+        slot = slots_by_number.get(mn)
+        if (
+            state is None or slot is None
+            or state.home_team is None or state.away_team is None
+            or slot.status != MatchStatus.FINISHED or slot.home_score is None
+        ):
+            return None, None
+        d = _decisive_score(slot)
+        if d is None:
+            return None, None
+        if d[0] > d[1]:
+            return state.home_team, state.away_team
+        return state.away_team, state.home_team
+
+    # Actual advancers per round (set of winning team names).
+    advancers_by_stage: dict[Stage, set[str]] = _dd(set)
+    actual_champion: str | None = None
+    actual_runner_up: str | None = None
+    for mn, slot in slots_by_number.items():
+        winner, loser = actual_slot_winner_loser(mn)
+        if winner:
+            advancers_by_stage[slot.stage].add(winner)
+            if slot.stage == Stage.FINAL:
+                actual_champion, actual_runner_up = winner, loser
+
+    # --- Per-user scoring ---
     preds = db.scalars(
         select(BracketPrediction)
         .join(BracketSlot)
         .where(BracketSlot.tournament_id == tournament.id)
     ).all()
+    preds_by_user: dict = _dd(list)
+    for p in preds:
+        preds_by_user[p.user_id].append(p)
+
+    users = {u.id: u for u in db.scalars(select(User)).all()}
 
     scored = 0
-    for p in preds:
-        slot = slots.get(p.slot_id)
-        if slot is None or slot.status != MatchStatus.FINISHED:
-            p.points_awarded = None
+    for user_id, user_preds in preds_by_user.items():
+        user = users.get(user_id)
+        if user is None:
             continue
-        decisive = _decisive_score(slot)
-        if decisive is None:
-            p.points_awarded = None
-            continue
-        p.points_awarded = score_bracket_prediction(
-            slot.stage,
-            p.predicted_home_score, p.predicted_away_score,
-            decisive[0], decisive[1],
-        )
-        scored += 1
+        try:
+            user_bracket = bracket_svc.derive_bracket(db, user, tournament)
+        except Exception:
+            user_bracket = {}
+
+        for p in user_preds:
+            slot = slots_by_id.get(p.slot_id)
+            if slot is None or slot.status != MatchStatus.FINISHED:
+                p.points_awarded = None
+                continue
+            decisive = _decisive_score(slot)
+            if decisive is None:
+                p.points_awarded = None
+                continue
+
+            state = user_bracket.get(slot.match_number)
+            pred_winner = pred_loser = None
+            if state and state.home_team and state.away_team:
+                if p.predicted_home_score >= p.predicted_away_score:
+                    pred_winner, pred_loser = state.home_team, state.away_team
+                else:
+                    pred_winner, pred_loser = state.away_team, state.home_team
+
+            p.points_awarded = score_bracket_prediction(
+                slot.stage,
+                p.predicted_home_score, p.predicted_away_score,
+                decisive,
+                pred_winner, pred_loser,
+                advancers_by_stage.get(slot.stage, set()),
+                actual_champion, actual_runner_up,
+            )
+            scored += 1
+
     db.flush()
     return scored
 
