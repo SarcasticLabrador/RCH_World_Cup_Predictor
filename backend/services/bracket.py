@@ -204,3 +204,103 @@ def derive_bracket(
             bracket[slot.match_number] = BracketState(home_team=h_team, away_team=a_team)
 
     return bracket
+
+
+# ── Actual bracket derivation (from real results, not predictions) ───────────
+
+def derive_actual_bracket(db: Session, tournament: Tournament) -> dict[int, BracketState]:
+    """Compute the real bracket from actual results.
+
+    R32 teams come from actual group standings (finished matches only);
+    Best-3rd slots use the same assignment algorithm as user brackets.
+    R16 onwards are propagated using the actual slot results, where the
+    winner is decided by the decisive score (regular time, with the penalty
+    winner getting +1 — mirroring scoring._decisive_score).
+
+    Slots whose upstream results are not yet complete have None teams.
+    """
+    from backend.db.models import BracketSlot
+    from backend.enums import MatchStatus
+
+    # --- Step 1: actual group standings ---
+    standings_by_group: dict[str, list] = {}
+    for grp in GROUPS:
+        standings_by_group[grp] = st_svc.actual_group_standings(db, tournament, grp)
+
+    def group_team(grp: str, pos: int) -> str | None:
+        rows = standings_by_group.get(grp, [])
+        # Only trust a position once the group has fully played (3 games each).
+        if len(rows) > pos and all(r.played >= 3 for r in rows[:3]):
+            return rows[pos].name
+        return None
+
+    all_groups_done = all(
+        len(standings_by_group[g]) >= 3
+        and all(r.played >= 3 for r in standings_by_group[g][:3])
+        for g in GROUPS
+    )
+
+    # --- Step 2: Best-3rd assignment from actual standings ---
+    eligibility = _slot_eligibility()
+    if all_groups_done:
+        ranked_thirds = st_svc.rank_third_placed(standings_by_group)
+        third_assignments = st_svc.assign_third_to_slots(ranked_thirds, eligibility)
+    else:
+        third_assignments = {}
+
+    # --- Step 3: R32 from actual standings ---
+    bracket: dict[int, BracketState] = {}
+
+    def resolve_r32(descriptor: str, match_num: int, is_home: bool) -> str | None:
+        if descriptor.startswith("Winner Group "):
+            return group_team(descriptor[-1], 0)
+        if descriptor.startswith("Runner-up Group "):
+            return group_team(descriptor[-1], 1)
+        if descriptor.startswith("Best 3rd"):
+            return third_assignments.get(match_num) if not is_home else None
+        return None
+
+    for mn, slotdef in SLOTS_BY_NUMBER.items():
+        if slotdef.stage != Stage.R32:
+            continue
+        bracket[mn] = BracketState(
+            home_team=resolve_r32(slotdef.home_descriptor, mn, True),
+            away_team=resolve_r32(slotdef.away_descriptor, mn, False),
+        )
+
+    # --- Step 4: load actual slot results and propagate winners ---
+    slots = {
+        s.match_number: s
+        for s in db.scalars(
+            select(BracketSlot).where(BracketSlot.tournament_id == tournament.id)
+        ).all()
+    }
+
+    def actual_winner(mn: int) -> str | None:
+        """Winner of a slot from its actual result, or None if unplayed/unknown."""
+        state = bracket.get(mn)
+        slot = slots.get(mn)
+        if state is None or slot is None:
+            return None
+        if state.home_team is None or state.away_team is None:
+            return None
+        if slot.status != MatchStatus.FINISHED or slot.home_score is None:
+            return None
+        # Decisive score: penalty winner gets +1 on regular time score.
+        h, a = slot.home_score, slot.away_score
+        if slot.penalty_home_score is not None:
+            if slot.penalty_home_score > slot.penalty_away_score:
+                h += 1
+            else:
+                a += 1
+        return state.home_team if h > a else state.away_team
+
+    for stage in [Stage.R16, Stage.QF, Stage.SF, Stage.FINAL]:
+        for slotdef in SLOTS_BY_NUMBER.values():
+            if slotdef.stage != stage:
+                continue
+            h_team = actual_winner(slotdef.home_from_match) if slotdef.home_from_match else None
+            a_team = actual_winner(slotdef.away_from_match) if slotdef.away_from_match else None
+            bracket[slotdef.match_number] = BracketState(home_team=h_team, away_team=a_team)
+
+    return bracket
