@@ -397,3 +397,13 @@ def admin_set_predictions_lock(session_token: str, locked: bool) -> dict:
     )
     r.raise_for_status()
     return r.json()
+
+
+def admin_rescore_preview(session_token: str) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/admin/rescore-preview",
+        headers=_auth_headers(session_token),
+        timeout=60.0,   # per-user bracket derivation can take a moment
+    )
+    r.raise_for_status()
+    return r.json()
