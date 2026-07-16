@@ -215,3 +215,70 @@ def set_predictions_lock(
     tournament.predictions_locked = locked
     db.commit()
     return {"predictions_locked": locked}
+
+
+
+@router.get("/user-bracket", response_model=dict)
+def user_bracket(
+    email: str,
+    _admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return a user's derived bracket: which teams they predicted per slot,
+    their predicted scoreline, predicted winner, and points awarded.
+
+    Usage: GET /admin/user-bracket?email=colleague@example.com
+    """
+    from sqlalchemy import select
+    from backend.db.models import BracketPrediction, BracketSlot
+    from backend.services import bracket as bracket_svc
+
+    tournament = _tournament(db)
+    target = db.scalar(select(User).where(User.email == email.strip().lower()))
+    if target is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No user with email {email}.")
+
+    derived = bracket_svc.derive_bracket(db, target, tournament)
+
+    slots = db.scalars(
+        select(BracketSlot)
+        .where(BracketSlot.tournament_id == tournament.id)
+        .order_by(BracketSlot.match_number)
+    ).all()
+    preds = {
+        bp.slot_id: bp
+        for bp in db.scalars(
+            select(BracketPrediction)
+            .join(BracketSlot)
+            .where(
+                BracketSlot.tournament_id == tournament.id,
+                BracketPrediction.user_id == target.id,
+            )
+        ).all()
+    }
+
+    rows = []
+    for s in slots:
+        state = derived.get(s.match_number)
+        bp = preds.get(s.id)
+        pred_winner = None
+        if state and state.home_team and state.away_team and bp:
+            pred_winner = (
+                state.home_team
+                if bp.predicted_home_score >= bp.predicted_away_score
+                else state.away_team
+            )
+        rows.append({
+            "match_number": s.match_number,
+            "stage": s.stage.value,
+            "slot_label": f"{s.home_descriptor} vs {s.away_descriptor}",
+            "predicted_home_team": state.home_team if state else None,
+            "predicted_away_team": state.away_team if state else None,
+            "predicted_score": (
+                f"{bp.predicted_home_score}-{bp.predicted_away_score}" if bp else None
+            ),
+            "predicted_winner": pred_winner,
+            "points_awarded": bp.points_awarded if bp else None,
+        })
+
+    return {"user": target.display_name or target.email, "bracket": rows}
