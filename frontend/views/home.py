@@ -21,13 +21,9 @@ def _scoring_rules() -> None:
         "- Correctly predict which team advances: **2 points**\n"
         "- Correct exact scoreline: **+3 points**\n\n"
         "> **Penalty note:** if a match ends 1–1 after extra time and "
-        "goes to a penalty shootout, predict the regular time score with "
-        "+1 for the winning side — so predict **2–1** (not 1–1 and not the "
-        "raw shootout score). The system applies this automatically when "
-        "the admin marks a match as decided by penalties.\n\n"
-        "> **Consolation rule:** if you predicted the wrong teams to "
-        "come through the group stage but your knockout scoreline still "
-        "matches the actual result, you can still earn the 3-point score bonus."
+        "goes to a penalty shootout, predict the score including"
+        "the extra goals from penalties (so if the match ends 1-1 in regular time"
+        "and 4-3 in penalties, the correct score would be 5-4"
     )
 
     st.markdown("**Bonus points for the Final**")
