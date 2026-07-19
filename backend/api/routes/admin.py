@@ -381,3 +381,84 @@ def populate_derived_teams(
 
     db.commit()
     return {"predictions_updated": updated, "points_changed": 0}
+
+
+@router.post("/score-override", response_model=dict)
+def set_score_override(
+    email: str,
+    match_points: int | None = None,
+    award_points: int | None = None,
+    clear: bool = False,
+    _admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Set or clear a manual score override for one user.
+
+    - Pass match_points and/or award_points to override those components.
+      An omitted component keeps its current override (or stays computed).
+    - Pass clear=true to remove all overrides and revert to computed scores.
+    The leaderboard reflects the change immediately (subject to frontend cache).
+    """
+    from sqlalchemy import select
+
+    target = db.scalar(select(User).where(User.email == email.strip().lower()))
+    if target is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No user with email {email}.")
+
+    if clear:
+        target.manual_match_points = None
+        target.manual_award_points = None
+    else:
+        if match_points is not None:
+            target.manual_match_points = match_points
+        if award_points is not None:
+            target.manual_award_points = award_points
+
+    db.commit()
+    return {
+        "user": target.display_name or target.email,
+        "manual_match_points": target.manual_match_points,
+        "manual_award_points": target.manual_award_points,
+    }
+
+
+@router.post("/score-overrides-bulk", response_model=dict)
+def set_score_overrides_bulk(
+    items: list[dict],
+    _admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Set manual score overrides for many users in one call.
+
+    Body: JSON list of {"email": ..., "match_points": int, "award_points": int}.
+    Unknown emails are reported back, not silently skipped. All valid rows are
+    applied in a single transaction.
+    """
+    from sqlalchemy import select
+
+    applied: list[str] = []
+    not_found: list[str] = []
+    invalid: list[str] = []
+
+    for item in items:
+        email = str(item.get("email", "")).strip().lower()
+        if not email:
+            continue
+        try:
+            m_pts = int(item["match_points"])
+            a_pts = int(item["award_points"])
+        except (KeyError, TypeError, ValueError):
+            invalid.append(email)
+            continue
+
+        target = db.scalar(select(User).where(User.email == email))
+        if target is None:
+            not_found.append(email)
+            continue
+
+        target.manual_match_points = m_pts
+        target.manual_award_points = a_pts
+        applied.append(email)
+
+    db.commit()
+    return {"applied": applied, "not_found": not_found, "invalid": invalid}
