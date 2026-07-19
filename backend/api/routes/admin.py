@@ -325,3 +325,59 @@ def rescore_preview(
         })
     comparison.sort(key=lambda r: r["new_rank"])
     return {"preview": True, "rows": comparison}
+
+
+@router.post("/populate-derived-teams", response_model=dict)
+def populate_derived_teams(
+    _admin: User = Depends(get_current_admin), db: Session = Depends(get_db)
+) -> dict:
+    """Fill derived_home_team / derived_away_team on all bracket predictions
+    WITHOUT touching points. Invisible to users — the leaderboard is unchanged.
+
+    Safe to run any time; re-running refreshes the snapshot.
+    """
+    from collections import defaultdict
+    from sqlalchemy import select
+    from backend.db.models import BracketPrediction, BracketSlot
+    from backend.services import bracket as bracket_svc
+
+    tournament = _tournament(db)
+
+    slots_by_id = {
+        s.id: s
+        for s in db.scalars(
+            select(BracketSlot).where(BracketSlot.tournament_id == tournament.id)
+        ).all()
+    }
+
+    preds = db.scalars(
+        select(BracketPrediction)
+        .join(BracketSlot)
+        .where(BracketSlot.tournament_id == tournament.id)
+    ).all()
+    preds_by_user: dict = defaultdict(list)
+    for p in preds:
+        preds_by_user[p.user_id].append(p)
+
+    users = {u.id: u for u in db.scalars(select(User)).all()}
+
+    updated = 0
+    for user_id, user_preds in preds_by_user.items():
+        user = users.get(user_id)
+        if user is None:
+            continue
+        try:
+            user_bracket = bracket_svc.derive_bracket(db, user, tournament)
+        except Exception:
+            continue
+        for p in user_preds:
+            slot = slots_by_id.get(p.slot_id)
+            if slot is None:
+                continue
+            state = user_bracket.get(slot.match_number)
+            p.derived_home_team = state.home_team if state else None
+            p.derived_away_team = state.away_team if state else None
+            updated += 1
+
+    db.commit()
+    return {"predictions_updated": updated, "points_changed": 0}
