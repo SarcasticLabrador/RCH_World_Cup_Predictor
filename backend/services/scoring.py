@@ -229,7 +229,17 @@ def score_all_bracket_predictions(db: Session, tournament: Tournament) -> int:
 
         for p in user_preds:
             slot = slots_by_id.get(p.slot_id)
-            if slot is None or slot.status != MatchStatus.FINISHED:
+            if slot is None:
+                p.points_awarded = None
+                continue
+
+            # Snapshot the derived teams regardless of match status, so SQL
+            # audits can see the user's implied fixture even before results.
+            state = user_bracket.get(slot.match_number)
+            p.derived_home_team = state.home_team if state else None
+            p.derived_away_team = state.away_team if state else None
+
+            if slot.status != MatchStatus.FINISHED:
                 p.points_awarded = None
                 continue
             decisive = _decisive_score(slot)
@@ -237,7 +247,6 @@ def score_all_bracket_predictions(db: Session, tournament: Tournament) -> int:
                 p.points_awarded = None
                 continue
 
-            state = user_bracket.get(slot.match_number)
             pred_winner = pred_loser = None
             if state and state.home_team and state.away_team:
                 if p.predicted_home_score >= p.predicted_away_score:
