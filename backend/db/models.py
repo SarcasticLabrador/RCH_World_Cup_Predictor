@@ -260,6 +260,11 @@ class BracketPrediction(Base):
     )
     predicted_home_score: Mapped[int] = mapped_column(Integer, nullable=False)
     predicted_away_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Derived team names, written by the scoring engine on every rescore.
+    # These snapshot which teams the user's bracket implied for this slot,
+    # so SQL audits can see teams without re-running the derivation.
+    derived_home_team: Mapped[str | None] = mapped_column(String(80))
+    derived_away_team: Mapped[str | None] = mapped_column(String(80))
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     last_edited_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
