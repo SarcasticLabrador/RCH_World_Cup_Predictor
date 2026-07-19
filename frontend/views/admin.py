@@ -214,6 +214,55 @@ def render() -> None:
 
 
 
+
+
+    st.divider()
+    st.subheader("🗂️ Populate derived teams (audit data)")
+    st.caption(
+        "Writes each user's implied knockout teams into the database for SQL "
+        "auditing. Does NOT change any points — the leaderboard users see is untouched."
+    )
+    if st.button("Populate derived teams", key="do_populate_derived"):
+        try:
+            with st.spinner("Deriving all user brackets..."):
+                out = api_client.admin_populate_derived_teams(token)
+            st.success(f"Updated {out['predictions_updated']} predictions. Points unchanged.")
+        except Exception as e:
+            st.error(f"Failed: {e}")
+
+    st.divider()
+    st.subheader("🔍 User bracket inspector")
+    st.caption(
+        "Shows which teams a user predicted in each knockout slot (derived from "
+        "their group stage predictions), their scoreline, predicted winner, and points."
+    )
+    insp_email = st.text_input("User email", key="insp_email")
+    if st.button("Look up bracket", key="do_inspect_bracket"):
+        if not insp_email.strip():
+            st.warning("Enter an email address.")
+        else:
+            try:
+                out = api_client.admin_user_bracket(token, insp_email.strip())
+                st.markdown(f"**Bracket for {out['user']}**")
+                table = [
+                    {
+                        "M#": r["match_number"],
+                        "Stage": r["stage"],
+                        "Predicted fixture": (
+                            f"{r['predicted_home_team']} vs {r['predicted_away_team']}"
+                            if r["predicted_home_team"] and r["predicted_away_team"]
+                            else r["slot_label"]
+                        ),
+                        "Score": r["predicted_score"] or "—",
+                        "Predicted winner": r["predicted_winner"] or "—",
+                        "Pts": r["points_awarded"] if r["points_awarded"] is not None else "—",
+                    }
+                    for r in out["bracket"]
+                ]
+                st.dataframe(table, use_container_width=True, hide_index=True)
+            except Exception as e:
+                st.error("No user with that email." if "404" in str(e) else f"Lookup failed: {e}")
+
     st.divider()
     st.subheader("🧪 Rescore preview (dry run)")
     st.caption(
