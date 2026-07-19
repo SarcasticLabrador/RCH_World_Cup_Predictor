@@ -407,3 +407,24 @@ def admin_rescore_preview(session_token: str) -> dict:
     )
     r.raise_for_status()
     return r.json()
+
+
+def admin_user_bracket(session_token: str, email: str) -> dict:
+    r = httpx.get(
+        f"{BACKEND_URL}/admin/user-bracket",
+        params={"email": email},
+        headers=_auth_headers(session_token),
+        timeout=30.0,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def admin_populate_derived_teams(session_token: str) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/admin/populate-derived-teams",
+        headers=_auth_headers(session_token),
+        timeout=60.0,
+    )
+    r.raise_for_status()
+    return r.json()
