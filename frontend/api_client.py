@@ -428,3 +428,36 @@ def admin_populate_derived_teams(session_token: str) -> dict:
     )
     r.raise_for_status()
     return r.json()
+
+
+def admin_set_score_override(
+    session_token: str,
+    email: str,
+    match_points: int | None = None,
+    award_points: int | None = None,
+    clear: bool = False,
+) -> dict:
+    params: dict = {"email": email, "clear": str(clear).lower()}
+    if match_points is not None:
+        params["match_points"] = match_points
+    if award_points is not None:
+        params["award_points"] = award_points
+    r = httpx.post(
+        f"{BACKEND_URL}/admin/score-override",
+        params=params,
+        headers=_auth_headers(session_token),
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def admin_set_score_overrides_bulk(session_token: str, items: list[dict]) -> dict:
+    r = httpx.post(
+        f"{BACKEND_URL}/admin/score-overrides-bulk",
+        json=items,
+        headers=_auth_headers(session_token),
+        timeout=60.0,
+    )
+    r.raise_for_status()
+    return r.json()
