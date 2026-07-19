@@ -216,6 +216,124 @@ def render() -> None:
 
 
 
+
+
+    st.divider()
+    st.subheader("📋 Bulk score overrides (paste from spreadsheet)")
+    st.caption(
+        "Paste rows with three columns: email, match points, award points. "
+        "Separators can be tabs (direct spreadsheet paste), commas, or semicolons. "
+        "A header row is detected and skipped automatically."
+    )
+    bulk_raw = st.text_area(
+        "Paste rows here",
+        key="bulk_scores_raw",
+        height=200,
+        placeholder="alice@example.com\t118\t20\nbob@example.com\t95\t30",
+    )
+
+    def _parse_bulk(raw: str) -> tuple[list[dict], list[str]]:
+        rows, errors = [], []
+        for i, line in enumerate(raw.strip().splitlines(), start=1):
+            line = line.strip()
+            if not line:
+                continue
+            for sep in ("\t", ";", ","):
+                if sep in line:
+                    parts = [p.strip() for p in line.split(sep)]
+                    break
+            else:
+                errors.append(f"Line {i}: no separator found")
+                continue
+            if len(parts) < 3:
+                errors.append(f"Line {i}: expected 3 columns, got {len(parts)}")
+                continue
+            if i == 1 and "@" not in parts[0]:
+                continue  # header row
+            try:
+                rows.append({
+                    "email": parts[0],
+                    "match_points": int(float(parts[1])),
+                    "award_points": int(float(parts[2])),
+                })
+            except ValueError:
+                errors.append(f"Line {i}: points not numeric ({parts[1]!r}, {parts[2]!r})")
+        return rows, errors
+
+    if bulk_raw.strip():
+        parsed, parse_errors = _parse_bulk(bulk_raw)
+        for err in parse_errors:
+            st.warning(err)
+        if parsed:
+            st.caption(f"Preview — {len(parsed)} row(s) parsed:")
+            st.dataframe(
+                [{"Email": r["email"], "Match pts": r["match_points"],
+                  "Award pts": r["award_points"],
+                  "Total": r["match_points"] + r["award_points"]} for r in parsed],
+                use_container_width=True, hide_index=True,
+            )
+            if st.button(f"Apply {len(parsed)} override(s)", key="do_bulk_scores", type="primary"):
+                try:
+                    out = api_client.admin_set_score_overrides_bulk(token, parsed)
+                    if hasattr(api_client.get_dashboard, "clear"):
+                        api_client.get_dashboard.clear()
+                    if hasattr(api_client.get_leaderboard, "clear"):
+                        api_client.get_leaderboard.clear()
+                    st.success(f"Applied {len(out['applied'])} override(s).")
+                    if out["not_found"]:
+                        st.error(f"Emails not found (fix and re-paste): {', '.join(out['not_found'])}")
+                    if out["invalid"]:
+                        st.error(f"Invalid rows: {', '.join(out['invalid'])}")
+                except Exception as e:
+                    st.error(f"Failed: {e}")
+
+    st.divider()
+    st.subheader("✏️ Manual score overrides")
+    st.caption(
+        "Set a user's match and/or award points directly, replacing the computed "
+        "values on the leaderboard. Users without an override keep their computed "
+        "score. Overrides survive rescores until you clear them."
+    )
+    ov_email = st.text_input("User email", key="ov_email")
+    ovc1, ovc2 = st.columns(2)
+    ov_match = ovc1.number_input("Match points", min_value=0, max_value=999,
+                                 key="ov_match")
+    ov_award = ovc2.number_input("Award points", min_value=0, max_value=999,
+                                 key="ov_award")
+    ovb1, ovb2 = st.columns(2)
+    if ovb1.button("Save override", key="do_ov_save", type="primary"):
+        if not ov_email.strip():
+            st.warning("Enter an email address.")
+        else:
+            try:
+                out = api_client.admin_set_score_override(
+                    token, ov_email.strip(),
+                    match_points=int(ov_match), award_points=int(ov_award),
+                )
+                if hasattr(api_client.get_dashboard, "clear"):
+                    api_client.get_dashboard.clear()
+                if hasattr(api_client.get_leaderboard, "clear"):
+                    api_client.get_leaderboard.clear()
+                st.success(
+                    f"Override saved for {out['user']}: "
+                    f"match {out['manual_match_points']}, awards {out['manual_award_points']}."
+                )
+            except Exception as e:
+                st.error("No user with that email." if "404" in str(e) else f"Failed: {e}")
+    if ovb2.button("Clear override (revert to computed)", key="do_ov_clear"):
+        if not ov_email.strip():
+            st.warning("Enter an email address.")
+        else:
+            try:
+                out = api_client.admin_set_score_override(token, ov_email.strip(), clear=True)
+                if hasattr(api_client.get_dashboard, "clear"):
+                    api_client.get_dashboard.clear()
+                if hasattr(api_client.get_leaderboard, "clear"):
+                    api_client.get_leaderboard.clear()
+                st.success(f"Override cleared for {out['user']} — computed score restored.")
+            except Exception as e:
+                st.error("No user with that email." if "404" in str(e) else f"Failed: {e}")
+
     st.divider()
     st.subheader("🗂️ Populate derived teams (audit data)")
     st.caption(
