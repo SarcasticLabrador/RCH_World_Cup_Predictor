@@ -16,7 +16,7 @@ def _scoring_rules() -> None:
     st.markdown(
         "**Group stage**\n"
         "- Correct tendency (win / draw / loss): **2 points**"
-        " (e.g. 8 points for predicting France, Spain, England, and Argentina to make it to the semi-finals \n"
+        " (e.g. 8 points for predicting France, Spain, England, and Argentina to make it to the semi-finals) \n"
         "- Correct exact scoreline: **+3 points** (total 5 if exact)\n\n"
         "**Knockout rounds**\n"
         "- Correctly predict which team advances: **2 points**\n"
