@@ -72,16 +72,18 @@ def compute(db: Session, tournament: Tournament, with_previous: bool = False) ->
         if pts and user_id in award_pts:
             award_pts[user_id] += pts
 
-    rows = [
-        {
+    # Apply manual overrides — where set, they replace the computed value.
+    rows = []
+    for u in users:
+        m = u.manual_match_points if u.manual_match_points is not None else match_pts[u.id]
+        a = u.manual_award_points if u.manual_award_points is not None else award_pts[u.id]
+        rows.append({
             "user_id": u.id,
             "display_name": _display(u),
-            "match_pts": match_pts[u.id],
-            "award_pts": award_pts[u.id],
-            "total_pts": match_pts[u.id] + award_pts[u.id],
-        }
-        for u in users
-    ]
+            "match_pts": m,
+            "award_pts": a,
+            "total_pts": m + a,
+        })
 
     _assign_ranks(rows, "match_pts")
     _assign_ranks(rows, "award_pts")
