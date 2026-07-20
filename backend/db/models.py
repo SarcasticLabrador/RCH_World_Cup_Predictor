@@ -36,6 +36,10 @@ class User(Base):
     display_name: Mapped[str | None] = mapped_column(String(80))
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     password_hash: Mapped[str | None] = mapped_column(String(128))
+    # Manual score overrides — when set, replace the computed values on the
+    # leaderboard. Null = use computed score (the default for everyone).
+    manual_match_points: Mapped[int | None] = mapped_column(Integer)
+    manual_award_points: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     magic_links: Mapped[list["MagicLink"]] = relationship(
